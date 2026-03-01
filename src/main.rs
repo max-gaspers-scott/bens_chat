@@ -6,7 +6,7 @@ use axum::http::Method;
 use axum::http::StatusCode;
 use axum::{
     Json, Router,
-    extract::{self, Path, Query},
+    extract::{self, Multipart, Path, Query},
     routing::{get, post},
 };
 use minio_rsc::{Minio, client::PresignedArgs, provider::StaticProvider};
@@ -80,29 +80,70 @@ async fn get_signed_url(Path(video_path): Path<String>) -> impl IntoResponse {
         }
     }
 }
-async fn upload_video(// mut multipart: Multipart,
-) -> Result<Json<Value>, (StatusCode, String)> {
-    let provider = StaticProvider::new("minioadmin", "minioadmin", None);
+async fn upload_video(mut multipart: Multipart) -> Result<Json<Value>, (StatusCode, String)> {
+    let endpoint = env::var("MINIO_ENDPOINT").unwrap_or_else(|_| "minio:9000".to_string());
+    let access_key = env::var("MINIO_ACCESS_KEY").unwrap_or_else(|_| "minioadmin".to_string());
+    let secret_key = env::var("MINIO_SECRET_KEY").unwrap_or_else(|_| "minioadmin".to_string());
+    let bucket = env::var("MINIO_BUCKET").unwrap_or_else(|_| "bucket".to_string());
+    let secure = env::var("MINIO_SECURE")
+        .map(|s| s.to_lowercase() == "true")
+        .unwrap_or(false);
+
+    let provider = StaticProvider::new(&access_key, &secret_key, None);
     let minio = Minio::builder()
-        .endpoint("minio:9000")
+        .endpoint(&endpoint)
         .provider(provider)
-        .secure(false)
+        .secure(secure)
         .build()
-        .unwrap();
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to create MinIO client: {}", e),
+            )
+        })?;
 
-    let _data = "hello minio";
+    while let Some(field) = multipart
+        .next_field()
+        .await
+        .map_err(|e| (StatusCode::BAD_REQUEST, format!("Multipart error: {}", e)))?
+    {
+        // Accept any field that carries a filename (the uploaded file)
+        let original_name = field
+            .file_name()
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| "upload.mp4".to_string());
 
-    let upload_result = minio.put_object("bucket", "file.txt", _data.into()).await;
+        // Prefix with a UUID so every upload gets a unique key
+        let object_key = format!("{}/{}", uuid::Uuid::new_v4(), original_name);
 
-    return Ok(Json(json!({
-        "status": upload_result.is_ok(),
-        "message": if upload_result.is_ok() {
-            "File uploaded successfully"
-        } else {
-            "Failed to upload file"
-        },
-        "file_name": "file.txt"
-    })));
+        let data = field.bytes().await.map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to read file bytes: {}", e),
+            )
+        })?;
+
+        minio
+            .put_object(&bucket, &object_key, data)
+            .await
+            .map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("MinIO upload failed: {}", e),
+                )
+            })?;
+
+        return Ok(Json(json!({
+            "status": true,
+            "message": "File uploaded successfully",
+            "object_key": object_key,
+        })));
+    }
+
+    Err((
+        StatusCode::BAD_REQUEST,
+        "No file field found in the request".to_string(),
+    ))
 }
 
 async fn health() -> String {
@@ -140,11 +181,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = Router::new()
         .route("/health", get(health))
         .route("/signed-urls/:video_path", get(get_signed_url))
+        .route("/upload", post(upload_video))
         .route("/python", get(python))
         .route("/users", post(post_user))
         .route("/messages", post(post_message))
         .route("/get-messages", get(get_content_sent_at_sender_id))
         .route("/get_user_id", get(get_user_id_username))
+        .route("/all-users", get(get_id_username_email))
         .fallback_service(static_service)
         .layer(
             CorsLayer::new()
@@ -296,9 +339,26 @@ async fn get_user_id_username(
     extract::State(pool): extract::State<PgPool>,
     match_val: Query<UsernameQuery>,
 ) -> Result<Json<Vec<User>>, (StatusCode, String)> {
-    let mut query = format!("SELECT * FROM users WHERE username = $1");
+    let query = "SELECT * FROM users WHERE username = $1";
 
     let q = sqlx::query_as::<_, User>(&query).bind(match_val.username.clone());
+
+    let elemint = q.fetch_all(&pool).await.map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Database err{}", e),
+        )
+    })?;
+
+    Ok(Json(elemint))
+}
+
+async fn get_id_username_email(
+    extract::State(pool): extract::State<PgPool>,
+) -> Result<Json<Vec<User>>, (StatusCode, String)> {
+    let query = "SELECT id, username, email, password_hash, created_at FROM users";
+
+    let q = sqlx::query_as::<_, User>(&query);
 
     let elemint = q.fetch_all(&pool).await.map_err(|e| {
         (

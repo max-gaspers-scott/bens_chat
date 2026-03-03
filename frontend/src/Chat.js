@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8081';
+const API_URL = process.env.REACT_APP_API_URL || '';
 
 function Chat({ currentUser, onLogout }) {
   // In-memory array of all users: [{ id, username }, ...]
@@ -11,7 +11,18 @@ function Chat({ currentUser, onLogout }) {
   const [loadingUsers, setLoadingUsers] = useState(true);
   const [loadingMsgs, setLoadingMsgs] = useState(false);
   const [sendError, setSendError] = useState('');
+  const [uploading, setUploading] = useState(false);
   const messagesEndRef = useRef(null);
+  const fileInputRef = useRef(null);
+
+  // Returns 'image', 'video', or null based on URL extension
+  function getMediaType(content) {
+    if (!content.startsWith('http')) return null;
+    const lower = content.toLowerCase().split('?')[0];
+    if (/\.(jpg|jpeg|png|gif|webp|bmp|svg)$/.test(lower)) return 'image';
+    if (/\.(mp4|webm|mov|avi|mkv|ogg)$/.test(lower)) return 'video';
+    return null;
+  }
 
   // Fetch all users into RAM on mount
   useEffect(() => {
@@ -84,6 +95,43 @@ function Chat({ currentUser, onLogout }) {
     }
   }
 
+  async function handleFileUpload(e) {
+    const file = e.target.files[0];
+    if (!file || !selectedUser) return;
+    setUploading(true);
+    setSendError('');
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch(`${API_URL}/upload`, { method: 'POST', body: formData });
+      const data = await res.json();
+      if (data.status && data.url) {
+        const msgRes = await fetch(`${API_URL}/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sender_id: currentUser.id,
+            receiver_id: selectedUser.id,
+            content: data.url,
+          }),
+        });
+        const msgData = await msgRes.json();
+        if (msgData.res === 'success') {
+          loadMessages(selectedUser);
+        } else {
+          setSendError('Failed to send media message.');
+        }
+      } else {
+        setSendError('Upload failed.');
+      }
+    } catch {
+      setSendError('Could not upload file.');
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  }
+
   return (
     <div className="chat-layout">
       <div className="chat-sidebar">
@@ -126,26 +174,52 @@ function Chat({ currentUser, onLogout }) {
             </div>
             <div className="messages-area">
               {loadingMsgs && messages.length === 0 && <div className="msg-loading">Loading messages...</div>}
-              {messages.map(msg => (
-                <div
-                  key={msg.id}
-                  className={`message-bubble ${msg.sender_id === currentUser.id ? 'sent' : 'received'}`}
-                >
-                  <span className="msg-content">{msg.content}</span>
-                  <span className="msg-time">{msg.sent_at ? new Date(msg.sent_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</span>
-                </div>
-              ))}
+              {messages.map(msg => {
+                const mediaType = getMediaType(msg.content);
+                return (
+                  <div
+                    key={msg.id}
+                    className={`message-bubble ${msg.sender_id === currentUser.id ? 'sent' : 'received'}`}
+                  >
+                    {mediaType === 'image' ? (
+                      <img className="msg-media" src={msg.content} alt="media" />
+                    ) : mediaType === 'video' ? (
+                      <video className="msg-media" src={msg.content} controls />
+                    ) : (
+                      <span className="msg-content">{msg.content}</span>
+                    )}
+                    <span className="msg-time">{msg.sent_at ? new Date(msg.sent_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</span>
+                  </div>
+                );
+              })}
               <div ref={messagesEndRef} />
             </div>
             <form className="message-input-row" onSubmit={handleSend}>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*,video/*"
+                style={{ display: 'none' }}
+                onChange={handleFileUpload}
+              />
+              <button
+                type="button"
+                className="upload-btn"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                title="Upload image or video"
+              >
+                {uploading ? '⏳' : '📎'}
+              </button>
               <input
                 className="message-input"
                 value={messageText}
                 onChange={e => setMessageText(e.target.value)}
                 placeholder={`Message ${selectedUser.username}...`}
                 autoComplete="off"
+                disabled={uploading}
               />
-              <button className="send-btn" type="submit">Send</button>
+              <button className="send-btn" type="submit" disabled={uploading}>Send</button>
             </form>
             {sendError && <p className="auth-error" style={{ padding: '0 1rem' }}>{sendError}</p>}
           </>

@@ -271,4 +271,32 @@ body { font-family: 'Segoe UI', sans-serif; background: #1a1d23; color: #e2e8f0;
   cursor: pointer;
   transition: background 0.2s;
 }
-.send-btn:hover { background: #3182ce; }
+.send-btn:hover:not(:disabled) { background: #3182ce; }
+.send-btn:disabled { background: #4a5568; cursor: not-allowed; }
+
+/* ── Upload button ── */
+.upload-btn {
+  padding: 0.65rem 0.85rem;
+  background: transparent;
+  color: #a0aec0;
+  border: 1px solid #4a5568;
+  border-radius: 24px;
+  font-size: 1rem;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.2s, color 0.2s;
+}
+.upload-btn:hover:not(:disabled) { background: #2d3748; color: #e2e8f0; }
+.upload-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── Media in message bubbles ── */
+.msg-media {
+  max-width: 100%;
+  max-height: 300px;
+  border-radius: 8px;
+  display: block;
+  object-fit: contain;
+}
+
+.message-bubble.sent .msg-media { border: 2px solid rgba(255,255,255,0.2); }
+.message-bubble.received .msg-media { border: 2px solid #4a5568; }

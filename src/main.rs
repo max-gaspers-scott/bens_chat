@@ -133,10 +133,17 @@ async fn upload_video(mut multipart: Multipart) -> Result<Json<Value>, (StatusCo
                 )
             })?;
 
+        // Build the public URL using the browser-accessible MinIO endpoint
+        let public_endpoint = env::var("MINIO_PUBLIC_ENDPOINT")
+            .unwrap_or_else(|_| "localhost:9000".to_string());
+        let scheme = if secure { "https" } else { "http" };
+        let url = format!("{}://{}/{}/{}", scheme, public_endpoint, bucket, object_key);
+
         return Ok(Json(json!({
             "status": true,
             "message": "File uploaded successfully",
             "object_key": object_key,
+            "url": url,
         })));
     }
 

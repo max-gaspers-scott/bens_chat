@@ -1,14 +1,10 @@
 import { useState } from 'react';
+import { sha256 } from 'js-sha256';
 
 const API_URL = process.env.REACT_APP_API_URL || '';
 
-async function hashPassword(password) {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(password);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  return Array.from(new Uint8Array(hashBuffer))
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('');
+function hashPassword(password) {
+  return sha256(password);
 }
 
 function Register({ onGoToLogin }) {
@@ -39,6 +35,7 @@ function Register({ onGoToLogin }) {
         }),
       });
       const data = await res.json();
+      console.log(data);
       if (data.res === 'success') {
         setSuccess(true);
       } else {

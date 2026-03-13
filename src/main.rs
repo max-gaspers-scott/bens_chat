@@ -28,11 +28,10 @@ use tower::service_fn;
 use tower_http::services::ServeDir;
 
 async fn generate_signed_url(object_key: String) -> Result<String, anyhow::Error> {
-    let endpoint = env::var("MINIO_ENDPOINT").unwrap_or_else(|_| "localhost:9001".to_string());
+    let endpoint = env::var("MINIO_ENDPOINT").unwrap_or_else(|_| "localhost:9000".to_string());
     let access_key = env::var("MINIO_ACCESS_KEY").unwrap_or_else(|_| "minioadmin".to_string());
     let secret_key = env::var("MINIO_SECRET_KEY").unwrap_or_else(|_| "minioadmin".to_string());
     let bucket = env::var("MINIO_BUCKET").unwrap_or_else(|_| "bucket".to_string());
-    let endpoint = env::var("MINIO_ENDPOINT").unwrap_or_else(|_| "localhost:9000".to_string());
     let secure = env::var("MINIO_SECURE")
         .map(|s| s.to_lowercase() == "true")
         .unwrap_or(false);
@@ -94,6 +93,7 @@ async fn upload_video(mut multipart: Multipart) -> Result<Json<Value>, (StatusCo
         .endpoint(&endpoint)
         .provider(provider)
         .secure(secure)
+        .region("us-east-1".to_string()) // Explicitly set region to match MinIO default
         .build()
         .map_err(|e| {
             (
@@ -134,8 +134,8 @@ async fn upload_video(mut multipart: Multipart) -> Result<Json<Value>, (StatusCo
             })?;
 
         // Build the public URL using the browser-accessible MinIO endpoint
-        let public_endpoint = env::var("MINIO_PUBLIC_ENDPOINT")
-            .unwrap_or_else(|_| "localhost:9000".to_string());
+        let public_endpoint =
+            env::var("MINIO_PUBLIC_ENDPOINT").unwrap_or_else(|_| "localhost:9000".to_string());
         let scheme = if secure { "https" } else { "http" };
         let url = format!("{}://{}/{}/{}", scheme, public_endpoint, bucket, object_key);
 

@@ -5,7 +5,7 @@ function SignUp({ onSignUpSuccess }) {
   const [formData, setFormData] = useState({
     username: '',
     email: '',
-    password_hash: '',
+    password: '',
     phone_number: '',
   });
   const [error, setError] = useState('');
@@ -62,8 +62,8 @@ function SignUp({ onSignUpSuccess }) {
           <label>Password</label>
           <input
             type="password"
-            name="password_hash"
-            value={formData.password_hash}
+            name="password"
+            value={formData.password}
             onChange={handleChange}
             required
           />

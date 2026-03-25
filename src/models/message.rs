@@ -5,4 +5,5 @@ pub struct Message {
     pub sender_id: uuid::Uuid,
     pub content: String,
     pub sent_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub minio_url: Option<String>,
 }

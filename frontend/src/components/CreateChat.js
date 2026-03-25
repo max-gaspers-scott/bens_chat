@@ -3,9 +3,26 @@ import { api } from '../api/api';
 
 function CreateChat({ currentUser, onChatCreated }) {
   const [chatName, setChatName] = useState('');
-  const [usernames, setUsernames] = useState('');
+  const [participants, setParticipants] = useState(['']);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const handleAddParticipant = () => {
+    setParticipants([...participants, '']);
+  };
+
+  const handleRemoveParticipant = (index) => {
+    if (participants.length > 1) {
+      const newParticipants = participants.filter((_, i) => i !== index);
+      setParticipants(newParticipants);
+    }
+  };
+
+  const handleParticipantChange = (index, value) => {
+    const newParticipants = [...participants];
+    newParticipants[index] = value;
+    setParticipants(newParticipants);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -27,8 +44,7 @@ function CreateChat({ currentUser, onChatCreated }) {
       }
 
       // Step 3: Look up other users by username and link them
-      const usernameList = usernames
-        .split(',')
+      const usernameList = participants
         .map((u) => u.trim())
         .filter((u) => u.length > 0);
 
@@ -43,7 +59,7 @@ function CreateChat({ currentUser, onChatCreated }) {
 
       // Success - reset form and notify parent
       setChatName('');
-      setUsernames('');
+      setParticipants(['']);
       onChatCreated();
     } catch (err) {
       setError(err.message || 'Failed to create chat');
@@ -51,6 +67,9 @@ function CreateChat({ currentUser, onChatCreated }) {
       setLoading(false);
     }
   };
+
+  const hasEmptyParticipants = participants.some((p) => p.trim().length > 0);
+  const canSubmit = chatName.trim() && hasEmptyParticipants && !loading;
 
   return (
     <div className="create-chat">
@@ -62,20 +81,44 @@ function CreateChat({ currentUser, onChatCreated }) {
             type="text"
             value={chatName}
             onChange={(e) => setChatName(e.target.value)}
+            placeholder="Enter chat name"
             required
           />
         </div>
         <div className="form-group">
-          <label>Add Users (comma-separated usernames)</label>
-          <input
-            type="text"
-            value={usernames}
-            onChange={(e) => setUsernames(e.target.value)}
-            placeholder="user1, user2, user3"
-          />
+          <label>Participants</label>
+          <div className="participants-list">
+            {participants.map((participant, index) => (
+              <div key={index} className="participant-input">
+                <input
+                  type="text"
+                  value={participant}
+                  onChange={(e) => handleParticipantChange(index, e.target.value)}
+                  placeholder={`Username ${index + 1}`}
+                />
+                {participants.length > 1 && (
+                  <button
+                    type="button"
+                    className="remove-participant-btn"
+                    onClick={() => handleRemoveParticipant(index)}
+                    title="Remove participant"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+          <button
+            type="button"
+            className="add-participant-btn"
+            onClick={handleAddParticipant}
+          >
+            + Add Another Participant
+          </button>
         </div>
         {error && <p className="error">{error}</p>}
-        <button type="submit" disabled={loading}>
+        <button type="submit" disabled={!canSubmit}>
           {loading ? 'Creating...' : 'Create Chat'}
         </button>
       </form>

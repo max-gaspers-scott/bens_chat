@@ -1,7 +1,5 @@
 
 
-version: '3.8'
-
 services:
   db:
     image: postgres:15-alpine
@@ -40,12 +38,15 @@ services:
     image: minio/mc
     depends_on:
       - minio
+    volumes:
+      - ./minio-cors.json:/minio-cors.json
     entrypoint: >
       /bin/sh -c "
       sleep 10;
         /usr/bin/mc alias set myminio http://minio:9000 minioadmin minioadmin || exit 1;
         /usr/bin/mc mb myminio/bucket || true;
         /usr/bin/mc anonymous set public myminio/bucket || exit 1;
+        /usr/bin/mc anonymous set-json /minio-cors.json myminio/bucket || true;
         echo 'Bucket creation completed successfully';
       exit 0;
       "
@@ -55,14 +56,23 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "9821:8081"
+      - "45000:8081"
     environment:
       DATABASE_URL: "postgres://dbuser:p@db:5432/data"
       DATABASE_CONNECT_TIMEOUT: "30"
+      JWT_SECRET: "dev-jwt-secret"
+      CORS_ALLOWED_ORIGINS: "http://localhost:3000"
       SQLX_OFFLINE: "true"
+      MINIO_ACCESS_KEY: "minioadmin"
+      MINIO_SECRET_KEY: "minioadmin"
+      MINIO_ENDPOINT: "minio:9000"
+      MINIO_PUBLIC_ENDPOINT: "localhost:9000"
     depends_on:
       db:
         condition: service_healthy
+      minio:
+        condition: service_healthy
+
     restart: on-failure
     healthcheck:
       test: ["CMD", "wget", "--spider", "http://localhost:8081/health"]
@@ -70,19 +80,6 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-
-  # python:
-  #   build:
-  #     context: ./fastapi-template
-  #   depends_on:
-  #     - app
-  #   healthcheck:
-  #     test: ["CMD", "wget", "--spider", "http://localhost:8003/health"]
-  #     interval: 10s
-  #     timeout: 5s
-  #     retries: 5
-  #     start_period: 30s
-
 volumes:
   postgres_data:
   minio_data:

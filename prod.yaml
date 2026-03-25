@@ -1,0 +1,82 @@
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: bens_chat2_db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-dbuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-data}
+    volumes:
+      - bens_chat2_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-dbuser} -d ${POSTGRES_DB:-data}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    container_name: bens_chat2_minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - bens_chat2_minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  createbuckets:
+    image: minio/mc
+    container_name: bens_chat2_createbuckets
+    depends_on:
+      - minio
+    volumes:
+      - ./minio-cors.json:/minio-cors.json
+    entrypoint: >
+      /bin/sh -c "
+      sleep 10;
+        /usr/bin/mc alias set myminio http://minio:9000 ${MINIO_ROOT_USER:-minioadmin} ${MINIO_ROOT_PASSWORD:-minioadmin} || exit 1;
+        /usr/bin/mc mb myminio/bucket || true;
+        /usr/bin/mc anonymous set public myminio/bucket || exit 1;
+        /usr/bin/mc anonymous set-json /minio-cors.json myminio/bucket || true;
+        echo 'Bucket creation completed successfully';
+      exit 0;
+      "
+
+  app:
+    image: maxthemerman/bens_chat2-app:latest
+    container_name: bens_chat2_app
+    ports:
+      - "9821:8081"
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-dbuser}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-data}
+      DATABASE_CONNECT_TIMEOUT: "30"
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET}
+      JWT_EXP_HOURS: ${JWT_EXP_HOURS:-24}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:?set CORS_ALLOWED_ORIGINS}
+      SQLX_OFFLINE: "true"
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD}
+      MINIO_ENDPOINT: "minio:9000"
+      MINIO_PUBLIC_ENDPOINT: ${MINIO_PUBLIC_ENDPOINT:?set MINIO_PUBLIC_ENDPOINT}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: on-failure
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "http://localhost:8081/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  bens_chat2_postgres_data:
+  bens_chat2_minio_data:

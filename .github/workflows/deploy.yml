@@ -35,7 +35,7 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
-            cd ~/my-project-dir
+            cd ~/chat2
             docker compose -f prod.yaml pull
             docker compose -f prod.yaml up -d
             docker image prune -f # Cleans up old images to save disk space

@@ -36,7 +36,20 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
+            LOGFILE=~/chat2/deploy.log
+            echo "===== Deploy started: $(date -u) =====" >> $LOGFILE
+
             cd ~/chat2
-            docker compose -f prod.yaml pull
-            docker compose -f prod.yaml up -d --force-recreate
-            docker image prune -f # Cleans up old images to save disk space
+            echo "-- Pulling images --" >> $LOGFILE
+            docker compose -f prod.yaml pull 2>&1 | tee -a $LOGFILE
+
+            echo "-- Starting containers --" >> $LOGFILE
+            docker compose -f prod.yaml up -d --force-recreate 2>&1 | tee -a $LOGFILE
+
+            echo "-- Running image --" >> $LOGFILE
+            docker inspect bens_chat2_app --format='Image: {{.Image}}  Created: {{.Created}}' 2>&1 | tee -a $LOGFILE
+
+            echo "-- Pruning old images --" >> $LOGFILE
+            docker image prune -f 2>&1 | tee -a $LOGFILE
+            echo "===== Deploy finished: $(date -u) =====" >> $LOGFILE
+

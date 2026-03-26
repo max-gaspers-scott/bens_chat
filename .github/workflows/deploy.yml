@@ -41,10 +41,10 @@ jobs:
 
             cd ~/chat2
             echo "-- Pulling images --" >> $LOGFILE
-            docker-compose -f prod.yaml pull 2>&1 | tee -a $LOGFILE
+            docker compose -f prod.yaml pull 2>&1 | tee -a $LOGFILE
 
             echo "-- Starting containers --" >> $LOGFILE
-            docker-compose -f prod.yaml up -d --force-recreate 2>&1 | tee -a $LOGFILE
+            docker compose -f prod.yaml up -d --force-recreate 2>&1 | tee -a $LOGFILE
 
             echo "-- Running image --" >> $LOGFILE
             docker inspect bens_chat2_app --format='Image: {{.Image}}  Created: {{.Created}}' 2>&1 | tee -a $LOGFILE

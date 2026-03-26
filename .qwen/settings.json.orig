@@ -5,9 +5,7 @@
       "Bash(git fetch *)",
       "Bash(git add *)",
       "Bash(git commit *)",
-      "Bash(git push *)",
-      "Bash(docker build *)"
+      "Bash(git push *)"
     ]
-  },
-  "$version": 3
+  }
 }

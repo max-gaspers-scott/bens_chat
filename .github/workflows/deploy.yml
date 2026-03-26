@@ -23,8 +23,6 @@ jobs:
           context: .
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/bens_chat2-app:latest
-          cache-from: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/bens_chat2-app:buildcache
-          cache-to: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/bens_chat2-app:buildcache,mode=max
           no-cache: true
 
   deploy:

@@ -38,5 +38,5 @@ jobs:
           script: |
             cd ~/chat2
             docker compose -f prod.yaml pull
-            docker compose -f prod.yaml up -d
+            docker compose -f prod.yaml up -d --force-recreate
             docker image prune -f # Cleans up old images to save disk space

@@ -43,6 +43,10 @@ jobs:
             echo "-- Pulling images --" >> $LOGFILE
             docker compose -f prod.yaml pull 2>&1 | tee -a $LOGFILE
 
+
+            echo "-- Stopping old containers --" >> $LOGFILE
+            docker compose -f prod.yaml down --remove-orphans 2>&1 | tee -a $LOGFILE
+
             echo "-- Starting containers --" >> $LOGFILE
             docker compose -f prod.yaml up -d --force-recreate 2>&1 | tee -a $LOGFILE
 

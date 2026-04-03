@@ -1,2 +1,0 @@
-ALTER TABLE messages ADD COLUMN IF NOT EXISTS minio_url TEXT;
-

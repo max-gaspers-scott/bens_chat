@@ -1,9 +1,9 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, memo, useRef } from 'react';
 import { api } from '../api/api';
 import SendMessage from './SendMessage';
 
 // Shows a placeholder shimmer while the signed URL is fetched and the image loads.
-function ChatImage({ objectKey }) {
+const ChatImage = memo(function ChatImage({ objectKey }) {
   const [src, setSrc] = useState(null);
   const [loaded, setLoaded] = useState(false);
 
@@ -25,18 +25,26 @@ function ChatImage({ objectKey }) {
       )}
     </div>
   );
-}
+});
 
 function ChatView({ chatId, currentUser }) {
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
+  const messagesEndRef = useRef(null);
 
   const loadMessages = useCallback(async () => {
-    setLoading(true);
     try {
       const result = await api.getMessages(chatId);
       if (result.status === 'success' && result.payload) {
-        setMessages(result.payload);
+        setMessages((prevMessages) => {
+          // Only update if messages have actually changed
+          const prevIds = prevMessages.map((m) => m.message_id).join(',');
+          const newIds = result.payload.map((m) => m.message_id).join(',');
+          if (prevIds === newIds) {
+            return prevMessages;
+          }
+          return result.payload;
+        });
       } else {
         setMessages([]);
       }
@@ -49,14 +57,33 @@ function ChatView({ chatId, currentUser }) {
   }, [chatId]);
 
   useEffect(() => {
-    if (chatId) {
-      loadMessages();
+    if (!chatId) {
+      return;
     }
+
+    loadMessages();
+
+    const intervalId = setInterval(() => {
+      loadMessages();
+    }, 3000);
+
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
   }, [chatId, loadMessages]);
 
   const handleRefresh = () => {
     loadMessages();
   };
+
+  // Scroll to bottom when messages change
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages]);
 
   if (!chatId) {
     return <div className="chat-view empty">Select a chat to view messages</div>;
@@ -93,6 +120,7 @@ function ChatView({ chatId, currentUser }) {
             </div>
           ))
         )}
+        <div ref={messagesEndRef} />
       </div>
       <SendMessage chatId={chatId} senderId={currentUser.user_id} onMessageSent={handleRefresh} />
     </div>

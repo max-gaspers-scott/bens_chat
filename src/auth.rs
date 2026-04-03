@@ -82,7 +82,9 @@ pub async fn authorize(
 
     let auth_user = match validate_token(token) {
         Ok(auth_user) => auth_user,
-        Err(_) => return Err(unauthorized_response("Invalid bearer token")),
+        Err(_) => {
+            return Err(unauthorized_response("Invalid bearer token"));
+        }
     };
 
     request.extensions_mut().insert(auth_user);

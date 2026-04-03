@@ -33,9 +33,11 @@ const jsonHeaders = () => ({ 'Content-Type': 'application/json' });
 
 const authHeaders = () => {
   const token = localStorage.getItem(TOKEN_STORAGE_KEY);
-  return token
+  const headers = token
     ? { ...jsonHeaders(), Authorization: `Bearer ${token}` }
     : jsonHeaders();
+
+  return headers;
 };
 
 export const api = {

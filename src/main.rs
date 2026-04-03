@@ -11,8 +11,8 @@ use minio_rsc;
 use crate::{auth::AuthUser, models::*};
 use axum::{
     Extension, Json, Router,
-    extract::{self, Query},
-    http::{HeaderValue, Method, StatusCode},
+    extract::{self, Query, Request},
+    http::{HeaderValue, Method, StatusCode, header::{AUTHORIZATION, CONTENT_TYPE}},
     middleware,
     response::{Html, IntoResponse},
     routing::{get, post},
@@ -33,12 +33,27 @@ async fn health() -> String {
     "healthy".to_string()
 }
 
+async fn debug_headers(request: Request) -> Json<Value> {
+    let mut headers_json = serde_json::Map::new();
+    for (name, value) in request.headers() {
+        if let Ok(val) = value.to_str() {
+            headers_json.insert(name.to_string().to_lowercase(), json!(val));
+        }
+    }
+    Json(json!({
+        "headers": headers_json,
+        "uri": request.uri().to_string(),
+        "method": request.method().to_string(),
+    }))
+}
+
 fn build_cors_layer() -> CorsLayer {
     let configured_origins = env::var("CORS_ALLOWED_ORIGINS").ok();
 
     let base = CorsLayer::new()
-        .allow_methods([Method::GET, Method::POST])
-        .allow_headers(Any);
+        .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
+        .allow_headers(Any)
+        .expose_headers([AUTHORIZATION, CONTENT_TYPE].map(|h| h.into()));
 
     match configured_origins.as_deref().map(str::trim) {
         Some("*") => base.allow_origin(Any),
@@ -98,7 +113,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let public_routes = Router::new()
         .route("/health", get(health))
         .route("/users", post(post_user))
-        .route("/auth/login", post(login_user));
+        .route("/auth/login", post(login_user))
+        .route("/debug-headers", get(debug_headers));
 
     let protected_routes = Router::new()
         .route("/user-chats", get(get_user_chats).post(post_user_chat))

@@ -4,6 +4,17 @@
   padding: 0;
 }
 
+/* Hide scrollbars for all elements while keeping scroll functionality */
+*::-webkit-scrollbar {
+  width: 0px;
+  background: transparent;
+}
+
+* {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
 :root {
   --bg-primary: #f5f5f5;
   --bg-secondary: #ffffff;

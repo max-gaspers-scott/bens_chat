@@ -111,7 +111,7 @@ function ChatView({ chatId, currentUser }) {
               {msg.minio_url && <ChatImage objectKey={msg.minio_url} />}
               <div className="message-meta">
                 <span className="message-sender">
-                  {msg.sender_id === currentUser.user_id ? 'You' : 'Other'}
+                  {msg.sender_id === currentUser.user_id ? 'You' : msg.username}
                 </span>
                 <span className="message-time">
                   {msg.sent_at ? new Date(msg.sent_at).toLocaleString() : ''}

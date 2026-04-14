@@ -12,7 +12,10 @@ use crate::{auth::AuthUser, models::*};
 use axum::{
     Extension, Json, Router,
     extract::{self, Query, Request},
-    http::{HeaderValue, Method, StatusCode, header::{AUTHORIZATION, CONTENT_TYPE}},
+    http::{
+        HeaderValue, Method, StatusCode,
+        header::{AUTHORIZATION, CONTENT_TYPE},
+    },
     middleware,
     response::{Html, IntoResponse},
     routing::{get, post},
@@ -181,6 +184,15 @@ async fn is_user_in_chat(pool: &PgPool, user_id: Uuid, chat_id: Uuid) -> Result<
     .await
 }
 
+#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]
+pub struct MessageWithUser {
+    pub message_id: uuid::Uuid,
+    pub username: String,
+    pub content: String,
+    pub sent_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub minio_url: Option<String>,
+}
+
 async fn get_message_id_sender_id_content_sent_at_chat_id(
     Extension(auth_user): Extension<AuthUser>,
     match_val: Query<ChatIdQuery>,
@@ -192,7 +204,8 @@ async fn get_message_id_sender_id_content_sent_at_chat_id(
         Err(e) => return Json(json!({"status": "error", "error": e.to_string()})),
     }
 
-    let result = sqlx::query_as::<_, Message>("SELECT * FROM messages WHERE chat_id = $1")
+    let q = "SELECT messages.message_id, users.username, messages.content, messages.sent_at, messages.minio_url FROM messages LEFT JOIN users ON messages.sender_id = users.user_id WHERE chat_id = $1";
+    let result = sqlx::query_as::<_, MessageWithUser>(q)
         .bind(match_val.chat_id)
         .fetch_all(&pool)
         .await;
@@ -417,7 +430,9 @@ struct FetchUrlQuery {
 fn build_minio_client(endpoint: &str) -> Minio {
     let access_key = env::var("MINIO_ACCESS_KEY").expect("MINIO_ACCESS_KEY not set");
     let secret_key = env::var("MINIO_SECRET_KEY").expect("MINIO_SECRET_KEY not set");
-    let secure = env::var("MINIO_SECURE").map(|v| v == "true").unwrap_or(false);
+    let secure = env::var("MINIO_SECURE")
+        .map(|v| v == "true")
+        .unwrap_or(false);
     let provider = StaticProvider::new(&access_key, &secret_key, None);
     Minio::builder()
         .endpoint(endpoint)
@@ -438,7 +453,12 @@ async fn get_put_url(
         Err(e) => return Json(json!({"status": "error", "error": e.to_string()})),
     }
 
-    let object_key = format!("media/{}/{}.{}", params.chat_id, Uuid::new_v4(), params.file_extension);
+    let object_key = format!(
+        "media/{}/{}.{}",
+        params.chat_id,
+        Uuid::new_v4(),
+        params.file_extension
+    );
     let public_endpoint = env::var("MINIO_PUBLIC_ENDPOINT").expect("MINIO_PUBLIC_ENDPOINT not set");
     let minio = build_minio_client(&public_endpoint);
     match minio
@@ -456,7 +476,12 @@ async fn get_fetch_url(
     Query(params): Query<FetchUrlQuery>,
 ) -> Json<Value> {
     // Extract chat_id from the object key (format: media/{chat_id}/{uuid}.{ext})
-    let chat_id = match params.object_key.split('/').nth(1).and_then(|s| Uuid::parse_str(s).ok()) {
+    let chat_id = match params
+        .object_key
+        .split('/')
+        .nth(1)
+        .and_then(|s| Uuid::parse_str(s).ok())
+    {
         Some(id) => id,
         None => return Json(json!({"status": "error", "error": "Invalid object key"})),
     };

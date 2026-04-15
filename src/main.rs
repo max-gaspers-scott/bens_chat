@@ -187,6 +187,7 @@ async fn is_user_in_chat(pool: &PgPool, user_id: Uuid, chat_id: Uuid) -> Result<
 #[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]
 pub struct MessageWithUser {
     pub message_id: uuid::Uuid,
+    pub sender_id: uuid::Uuid,
     pub username: String,
     pub content: String,
     pub sent_at: Option<chrono::DateTime<chrono::Utc>>,
@@ -204,7 +205,7 @@ async fn get_message_id_sender_id_content_sent_at_chat_id(
         Err(e) => return Json(json!({"status": "error", "error": e.to_string()})),
     }
 
-    let q = "SELECT messages.message_id, users.username, messages.content, messages.sent_at, messages.minio_url FROM messages LEFT JOIN users ON messages.sender_id = users.user_id WHERE chat_id = $1";
+    let q = "SELECT messages.message_id, messages.sender_id, users.username, messages.content, messages.sent_at, messages.minio_url FROM messages LEFT JOIN users ON messages.sender_id = users.user_id WHERE chat_id = $1 ORDER BY sent_at";
     let result = sqlx::query_as::<_, MessageWithUser>(q)
         .bind(match_val.chat_id)
         .fetch_all(&pool)

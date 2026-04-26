@@ -1,1 +1,19 @@
-/target
+# IDEs and editors
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environment variables
+.env
+.env.local
+
+# Build and dependencies (catch-all)
+node_modules/
+target/
+build/
+dist/

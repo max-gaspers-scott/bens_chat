@@ -102,8 +102,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let static_service =
-        ServeDir::new("frontend/build").not_found_service(service_fn(|_req| async {
-            match tokio::fs::read_to_string("frontend/build/index.html").await {
+        ServeDir::new("../frontend/build").not_found_service(service_fn(|_req| async {
+            match tokio::fs::read_to_string("../frontend/build/index.html").await {
                 Ok(body) => Ok((StatusCode::OK, Html(body)).into_response()),
                 Err(err) => Ok((
                     StatusCode::INTERNAL_SERVER_ERROR,

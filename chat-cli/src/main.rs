@@ -75,7 +75,6 @@ async fn get_chats(user_info: &LoginPayload) -> Result<ChatResponce, reqwest::Er
     let client = reqwest::Client::new();
     let res = client.get(url).bearer_auth(&user_info.token).send().await?;
     let chats: ChatResponce = res.json().await?;
-    println!("{:?}", chats.data[0].chat_id);
     Ok(chats)
 }
 
@@ -84,18 +83,22 @@ async fn get_chats(user_info: &LoginPayload) -> Result<ChatResponce, reqwest::Er
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let login_str = "login".to_string();
+    let login = login().await?;
+
     loop {
         let mut buffer = String::new();
         std::io::stdin().read_line(&mut buffer)?;
         let input = buffer.trim();
         println!("{}", buffer);
+
         match input {
-            "login" => {
-                let login = login().await;
-                match login {
-                    Ok(_) => {}
-                    Err(e) => println!("error logging in: {}", e),
+            "login" => {}
+            "chats" => {
+                let chats_raw = get_chats(&login);
+                let chats = chats_raw.await.unwrap().data;
+                for c in chats {
+                    println!("name: {}", c.chat_name);
+                    println!("id: {}", c.chat_id);
                 }
             }
             "health" => {
@@ -109,16 +112,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
     get_health().await;
-    let user_info = login().await.unwrap();
-    let res = get_chats(&user_info).await.unwrap();
-    let chat_id = res.data[0].chat_id;
-
-    let messages = get_messages(user_info.token.clone(), chat_id)
-        .await
-        .unwrap();
-    for m in messages {
-        println!("{}: {}", m.username, m.content)
-    }
+    // let user_info = login().await.unwrap();
+    // let res = get_chats(&user_info).await.unwrap();
+    // let chat_id = res.data[0].chat_id;
+    //
+    // let messages = get_messages(user_info.token.clone(), chat_id)
+    //     .await
+    //     .unwrap();
+    // for m in messages {
+    //     println!("{}: {}", m.username, m.content)
+    // }
 
     Ok(())
 }
@@ -143,32 +146,32 @@ async fn login() -> Result<LoginPayload, reqwest::Error> {
     println!("what is your password");
     let mut password = String::new();
     std::io::stdin().read_line(&mut password);
+    let password = password.trim();
+    let name = name.trim();
 
-    let url = "http://localhost:8081/auth/login";
+    let url = "http://localhost:9821/auth/login";
     let mut params = HashMap::new();
     params.insert("username", name);
     params.insert("password", password);
+    println!("{:?}", params);
     let client = reqwest::Client::new();
     let res = match client.post(url).json(&params).send().await {
         Ok(r) => r,
         Err(e) => return Err(e),
     };
 
-    let data = res.text().await?;
-    print!("data is: {}", data);
     //TODO: data may come back as {error: "messages"}
     //wich can not be turned into a LoginPayload, and will error.
 
-    // let data: LoginResponse = res.json().await?;
-    // let user_info = data.payload;
-    //
-    // let path = std::path::Path::new("./token.txt");
-    // write_file(path, &user_info.token);
-    // Ok(user_info)
-    Ok(LoginPayload {
-        token: "hi".to_string(),
-        user_id: "hi".to_string(),
-    })
+    let data: LoginResponse = res.json().await?;
+    let user_info = data.payload;
+
+    let path = std::path::Path::new("./token.txt");
+    match write_file(path, &user_info.token) {
+        Ok(_) => {}
+        Err(e) => println!("write fiel error: {}", e),
+    }
+    Ok(user_info)
 }
 
 // save token
@@ -180,7 +183,7 @@ async fn login() -> Result<LoginPayload, reqwest::Error> {
 //
 //
 pub fn write_file(path: &std::path::Path, text: &str) -> Result<(), std::io::Error> {
-    let mut file = OpenOptions::new().create(true).open(path)?;
+    let mut file = OpenOptions::new().create(true).write(true).open(path)?;
     file.write_all(text.as_bytes())?;
     file.flush()?;
     Ok(())

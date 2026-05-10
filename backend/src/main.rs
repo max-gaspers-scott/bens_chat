@@ -21,6 +21,7 @@ use axum::{
     routing::{get, post},
 };
 use bcrypt::{DEFAULT_COST, hash, verify};
+use core::str;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use sqlx::{PgPool, postgres::PgPoolOptions};
@@ -116,6 +117,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let public_routes = Router::new()
         .route("/health", get(health))
         .route("/users", post(post_user))
+        .route("/password-set", post(set_password))
         .route("/auth/login", post(login_user))
         .route("/debug-headers", get(debug_headers));
 
@@ -182,6 +184,35 @@ async fn is_user_in_chat(pool: &PgPool, user_id: Uuid, chat_id: Uuid) -> Result<
     .bind(chat_id)
     .fetch_one(pool)
     .await
+}
+
+#[derive(Debug, Deserialize)]
+struct NewPass {
+    new_password: String,
+}
+async fn set_password(
+    pool: &PgPool,
+    user_id: Uuid,
+    new_pass: Query<NewPass>,
+) -> Result<(), sqlx::Error> {
+    let password_hash = match hash(&new_pass.new_password, DEFAULT_COST) {
+        Ok(password_hash) => password_hash,
+        Err(e) => {
+            println!("error hashing passowrd!!!!!");
+            "bad stuff happend !!!!!".to_string()
+        }
+    };
+    let q = "UPDATE users SET password = $1 WHERE id = $2";
+
+    let result = sqlx::query!(
+        "UPDATE users SET password = $1 WHERE id = $2",
+        password_hash,
+        user_id
+    )
+    .execute(&pool)
+    .await?;
+
+    Ok(())
 }
 
 #[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]

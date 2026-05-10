@@ -4,6 +4,7 @@ import Login from './components/Login';
 import CreateChat from './components/CreateChat';
 import ChatList from './components/ChatList';
 import ChatView from './components/ChatView';
+import ResetPassword from './components/ResetPassword';
 import './App.css';
 import { api } from './api/api';
 
@@ -35,7 +36,7 @@ function readStoredTheme() {
 function App() {
   const [currentUser, setCurrentUser] = useState(() => readStoredUser());
   const [selectedChatId, setSelectedChatId] = useState(null);
-  const [view, setView] = useState(() => (readStoredUser() ? 'chat' : 'login')); // 'signup', 'login', 'chat'
+  const [view, setView] = useState(() => (readStoredUser() ? 'chat' : 'login')); // 'signup', 'login', 'chat', 'reset-password'
   const [darkTheme, setDarkTheme] = useState(() => readStoredTheme());
 
   const toggleTheme = () => {
@@ -87,6 +88,9 @@ function App() {
         {currentUser && (
           <div className="user-info">
             <span>Logged in as: {currentUser.username}</span>
+            <button onClick={() => setView('reset-password')} className="settings-btn">
+              Change Password
+            </button>
             <button onClick={handleLogout} className="logout-btn">
               Logout
             </button>
@@ -114,8 +118,12 @@ function App() {
           </>
         )}
 
+        {currentUser && view === 'reset-password' && (
+          <ResetPassword onBack={() => setView('chat')} />
+        )}
+
         {currentUser && view === 'chat' && (
-          <div className="chat-container">
+          <div className={`chat-container ${!selectedChatId ? 'no-chat-selected' : ''}`}>
             <aside className="chat-sidebar">
               <CreateChat currentUser={currentUser} onChatCreated={handleChatCreated} />
               <ChatList

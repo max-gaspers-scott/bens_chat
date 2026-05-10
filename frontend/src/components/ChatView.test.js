@@ -10,6 +10,15 @@ jest.mock('../api/api', () => ({
 
 jest.mock('./SendMessage', () => () => <div data-testid="send-message" />);
 
+// Mock scrollIntoView
+window.HTMLElement.prototype.scrollIntoView = jest.fn();
+
+test('renders empty state when no chatId is provided', () => {
+  render(<ChatView chatId={null} currentUser={{ user_id: 'user-1' }} />);
+  expect(screen.getByText(/Select a chat to view messages/i)).toBeInTheDocument();
+  expect(screen.getByText(/You can create a chat/i)).toBeInTheDocument();
+});
+
 test('renders all messages returned for a chat', async () => {
   api.getMessages.mockResolvedValue({
     status: 'success',

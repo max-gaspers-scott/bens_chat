@@ -173,4 +173,16 @@ export const api = {
     });
     return response.json();
   },
+
+  // Set/Change password
+  async setPassword(new_password) {
+    const response = await fetch(
+      `${API_BASE_URL}/password-set?new_password=${encodeURIComponent(new_password)}`,
+      {
+        method: 'POST',
+        headers: authHeaders(),
+      }
+    );
+    return response.json();
+  },
 };

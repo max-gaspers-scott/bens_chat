@@ -87,9 +87,9 @@ function ChatView({ chatId, currentUser }) {
 
   if (!chatId) {
     return (
-      <div>
-        <p className="chat-view empty">Select a chat to view messages</p>
-        <p className="chat-view empty">You can create a chat by typing the usernames of the participants in the names field and giving the chat a name. Then hit "Create Chat"</p>
+      <div className="chat-view empty">
+        <p>Select a chat to view messages</p>
+        <p className="hint">You can create a chat by typing participants' usernames and a chat name above.</p>
       </div>
     );
   }

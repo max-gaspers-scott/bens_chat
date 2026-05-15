@@ -6,8 +6,6 @@ use minio_rsc::provider::StaticProvider;
 mod auth;
 mod models;
 
-use minio_rsc;
-
 use crate::{auth::AuthUser, models::*};
 use axum::{
     Extension, Json, Router,
@@ -102,9 +100,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(e) => eprintln!("Error applying migrations: {}", e),
     };
 
-    let static_service =
-        ServeDir::new("../frontend/build").not_found_service(service_fn(|_req| async {
-            match tokio::fs::read_to_string("../frontend/build/index.html").await {
+    let static_dir = env::var("STATIC_DIR").unwrap_or_else(|_| "../frontend/build".to_string());
+    let not_found_dir = static_dir.clone();
+    let static_service = ServeDir::new(static_dir).not_found_service(service_fn(move |_req| {
+        let dir = not_found_dir.clone();
+        async move {
+            match tokio::fs::read_to_string(dir + "/index.html").await {
                 Ok(body) => Ok((StatusCode::OK, Html(body)).into_response()),
                 Err(err) => Ok((
                     StatusCode::INTERNAL_SERVER_ERROR,
@@ -112,12 +113,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 )
                     .into_response()),
             }
-        }));
+        }
+    }));
 
     let public_routes = Router::new()
         .route("/health", get(health))
         .route("/users", post(post_user))
-        .route("/password-set", post(set_password))
         .route("/auth/login", post(login_user))
         .route("/debug-headers", get(debug_headers));
 
@@ -129,6 +130,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .route("/users", get(get_user_id_username))
         .route("/chats", post(post_chat))
+        .route("/password-set", post(set_password))
         .route("/minio-fetch", get(get_fetch_url))
         .route("/minio-post", get(get_put_url))
         .layer(middleware::from_fn(auth::authorize));
@@ -190,29 +192,29 @@ async fn is_user_in_chat(pool: &PgPool, user_id: Uuid, chat_id: Uuid) -> Result<
 struct NewPass {
     new_password: String,
 }
+
 async fn set_password(
-    pool: &PgPool,
-    user_id: Uuid,
-    new_pass: Query<NewPass>,
-) -> Result<(), sqlx::Error> {
+    extract::State(pool): extract::State<PgPool>,
+    Extension(auth_user): Extension<AuthUser>,
+    Query(new_pass): Query<NewPass>,
+) -> Json<Value> {
     let password_hash = match hash(&new_pass.new_password, DEFAULT_COST) {
         Ok(password_hash) => password_hash,
         Err(e) => {
-            println!("error hashing passowrd!!!!!");
-            "bad stuff happend !!!!!".to_string()
+            return Json(json!({"status": "error", "error": format!("Hash error: {}", e)}));
         }
     };
-    let q = "UPDATE users SET password = $1 WHERE id = $2";
 
-    let result = sqlx::query!(
-        "UPDATE users SET password = $1 WHERE id = $2",
-        password_hash,
-        user_id
-    )
-    .execute(&pool)
-    .await?;
+    let result = sqlx::query("UPDATE users SET password_hash = $1 WHERE user_id = $2")
+        .bind(password_hash)
+        .bind(auth_user.user_id)
+        .execute(&pool)
+        .await;
 
-    Ok(())
+    match result {
+        Ok(_) => Json(json!({"status": "success"})),
+        Err(e) => Json(json!({"status": "error", "error": e.to_string()})),
+    }
 }
 
 #[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]

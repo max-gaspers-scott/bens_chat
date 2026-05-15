@@ -58,6 +58,7 @@ services:
     ports:
       - "9821:8081"
     environment:
+      STATIC_DIR: "/app/frontend/build"
       DATABASE_URL: "postgres://dbuser:p@db:5432/data"
       DATABASE_CONNECT_TIMEOUT: "30"
       JWT_SECRET: "dev-jwt-secret"

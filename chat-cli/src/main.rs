@@ -89,10 +89,41 @@ async fn get_chats(user_info: &LoginPayload) -> Result<ChatResponce, reqwest::Er
 
 // need to add this json as headers
 // {'Content-Type': 'application/json',  Authorization: `Bearer ${token}`}
+//
+#[derive(Eq, Hash, PartialEq)]
+enum State {
+    Chats,
+    Messages,
+}
+
+async fn send_message(
+    login: &LoginPayload,
+    message: &str,
+    chat_id: &Uuid,
+) -> Result<(), reqwest::Error> {
+    let url = format!("http://localhost:9821/messages?chat_id={}", chat_id);
+    let client = reqwest::Client::new();
+
+    let payload = serde_json::json!({
+        "chat_id": chat_id,
+        "content": message,
+    });
+
+    let res = client
+        .post(url)
+        .json(&payload)
+        .bearer_auth(login.token.clone())
+        .send()
+        .await?;
+    Ok(())
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let mut fsa: HashMap<State, State> = HashMap::new();
+    fsa.insert(State::Chats, State::Messages);
     let login = login().await?;
+    println!("you can now use chats to see the chats you are in or use health to check api health");
 
     loop {
         let mut buffer = String::new();
@@ -120,8 +151,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let messages = get_messages(&login, selected_id).await.unwrap();
                 print!("{}[2J{}[1;1H", 27 as char, 27 as char);
                 for m in messages {
-                    println!("{}: {}", m.sender_id, m.content);
+                    println!("{}: {}", m.username, m.content);
                 }
+
+                let mut message = String::new();
+                std::io::stdin().read_line(&mut message)?;
+                let input = message.trim();
+                send_message(&login, &message, selected_id);
             }
             "health" => {
                 let health = get_health().await;
@@ -175,11 +211,13 @@ async fn login() -> Result<LoginPayload, reqwest::Error> {
     let mut params = HashMap::new();
     params.insert("username", name);
     params.insert("password", password);
-    println!("{:?}", params);
     let client = reqwest::Client::new();
     let res = match client.post(url).json(&params).send().await {
         Ok(r) => r,
-        Err(e) => return Err(e),
+        Err(e) => {
+            print!("error loging in");
+            return Err(e);
+        }
     };
 
     //TODO: data may come back as {error: "messages"}
@@ -193,6 +231,9 @@ async fn login() -> Result<LoginPayload, reqwest::Error> {
         Ok(_) => {}
         Err(e) => println!("write fiel error: {}", e),
     }
+
+    print!("{}[2J{}[1;1H", 27 as char, 27 as char);
+    println!("loged in as: {}", params.get("username").unwrap());
     Ok(user_info)
 }
 

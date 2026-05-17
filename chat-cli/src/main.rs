@@ -1,12 +1,8 @@
-use reqwest::{self, Client, Proxy};
+use reqwest::{self, Client};
 use serde::Deserialize;
-use std::collections::hash_map;
+use std::collections::HashMap;
 use std::fs::OpenOptions;
-use std::io::{LineWriter, Write};
-use std::path::PathBuf;
-use std::ptr::hash;
-use std::{collections::HashMap, os::unix::process};
-use std::{fs, io};
+use std::io::Write;
 use uuid::Uuid;
 
 async fn get_health() -> Result<(), reqwest::Error> {
@@ -43,7 +39,7 @@ async fn get_messages(
     println!("chat-id id: {:?}", chat_id);
     let url = format!("http://localhost:9821/messages?chat_id={}", chat_id);
 
-    let client = reqwest::Client::new();
+    let client = Client::new();
 
     let res = client
         .get(url)
@@ -109,7 +105,7 @@ async fn send_message(
         "content": message,
     });
 
-    let res = client
+    let _ = client
         .post(url)
         .json(&payload)
         .bearer_auth(login.token.clone())
@@ -132,7 +128,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("{}", buffer);
 
         match input {
-            "login" => {}
             "chats" => {
                 let chats_raw = get_chats(&login);
                 let chats = chats_raw.await.unwrap().data;
@@ -156,8 +151,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                 let mut message = String::new();
                 std::io::stdin().read_line(&mut message)?;
-                let input = message.trim();
-                send_message(&login, &message, selected_id);
+                send_message(&login, &message, selected_id).await.unwrap();
             }
             "health" => {
                 let health = get_health().await;
@@ -169,7 +163,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             _ => println!("not an option"),
         }
     }
-    get_health().await;
     // let user_info = login().await.unwrap();
     // let res = get_chats(&user_info).await.unwrap();
     // let chat_id = res.data[0].chat_id;
@@ -180,8 +173,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // for m in messages {
     //     println!("{}: {}", m.username, m.content)
     // }
-
-    Ok(())
 }
 
 #[derive(Deserialize)]
@@ -199,11 +190,21 @@ struct LoginPayload {
 async fn login() -> Result<LoginPayload, reqwest::Error> {
     println!("what is your name");
     let mut name = String::new();
-    std::io::stdin().read_line(&mut name);
+    match std::io::stdin().read_line(&mut name) {
+        Ok(_) => {}
+        Err(e) => {
+            println!("error getting name: {e}");
+        }
+    }
 
     println!("what is your password");
     let mut password = String::new();
-    std::io::stdin().read_line(&mut password);
+    match std::io::stdin().read_line(&mut password) {
+        Ok(_) => {}
+        Err(e) => {
+            print!("error getting password: {e}");
+        }
+    }
     let password = password.trim();
     let name = name.trim();
 

@@ -153,6 +153,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         send_message(&login, &message, selected_id).await.unwrap();
         let input = buff.trim();
         let selected_id = hashmap.get(input).unwrap();
+        if message.trim() == "/update" {
+            show_messages(&login, selected_id).await.unwrap();
+        }
         if message.trim() == "/exit" {
             let chats_raw = get_chats(&login);
             let chats = chats_raw.await.unwrap().data;

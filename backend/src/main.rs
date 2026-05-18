@@ -272,7 +272,13 @@ async fn post_message(
     .await;
 
     match result {
-        Ok(value) => Json(json!({"res": "success", "data": value})),
+        Ok(value) => {
+            if value.content.split_once(" ").unwrap().0 == "@gemini" {
+                print!("messge to starts with @gemini");
+                //TODO: make gemini post a responce
+            };
+            Json(json!({"res": "success", "data": value}))
+        }
         Err(e) => Json(json!({"res": format!("error: {}", e)})),
     }
 }

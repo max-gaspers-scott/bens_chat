@@ -114,65 +114,62 @@ async fn send_message(
     Ok(())
 }
 
+async fn show_messages(login: &LoginPayload, selected_id: &Uuid) -> Result<(), reqwest::Error> {
+    let messages = get_messages(&login, selected_id).await.unwrap();
+    print!("{}[2J{}[1;1H", 27 as char, 27 as char);
+    for m in messages {
+        println!("{}: {}", m.username, m.content);
+    }
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut fsa: HashMap<State, State> = HashMap::new();
     fsa.insert(State::Chats, State::Messages);
     let login = login().await?;
-    println!("you can now use chats to see the chats you are in or use health to check api health");
+
+    let chats_raw = get_chats(&login);
+    let chats = chats_raw.await.unwrap().data;
+    let mut hashmap = HashMap::new();
+
+    for c in chats {
+        println!("chat: {}", c.chat_name);
+        hashmap.insert(c.chat_name, c.chat_id);
+    }
+
+    let mut buff = String::new();
+    println!("what chat do you want to see");
+
+    std::io::stdin().read_line(&mut buff).unwrap();
+    let input = buff.trim();
+    let selected_id = hashmap.get(input).unwrap();
+
+    show_messages(&login, selected_id).await.unwrap();
 
     loop {
-        let mut buffer = String::new();
-        std::io::stdin().read_line(&mut buffer)?;
-        let input = buffer.trim();
-        println!("{}", buffer);
-
-        match input {
-            "chats" => {
-                let chats_raw = get_chats(&login);
-                let chats = chats_raw.await.unwrap().data;
-                let mut hashmap = HashMap::new();
-
-                for c in chats {
-                    println!("chat: {}", c.chat_name);
-                    hashmap.insert(c.chat_name, c.chat_id);
-                }
-
-                let mut buff = String::new();
-                println!("what chat do you want to see");
-                std::io::stdin().read_line(&mut buff)?;
-                let input = buff.trim();
-                let selected_id = hashmap.get(input).unwrap();
-                let messages = get_messages(&login, selected_id).await.unwrap();
-                print!("{}[2J{}[1;1H", 27 as char, 27 as char);
-                for m in messages {
-                    println!("{}: {}", m.username, m.content);
-                }
-
-                let mut message = String::new();
-                std::io::stdin().read_line(&mut message)?;
-                send_message(&login, &message, selected_id).await.unwrap();
+        let mut message = String::new();
+        std::io::stdin().read_line(&mut message)?;
+        send_message(&login, &message, selected_id).await.unwrap();
+        let input = buff.trim();
+        let selected_id = hashmap.get(input).unwrap();
+        if message.trim() == "/exit" {
+            let chats_raw = get_chats(&login);
+            let chats = chats_raw.await.unwrap().data;
+            let mut hashmap = HashMap::new();
+            for c in chats {
+                println!("chat: {}", c.chat_name);
+                hashmap.insert(c.chat_name, c.chat_id);
             }
-            "health" => {
-                let health = get_health().await;
-                match health {
-                    Ok(_) => println!("api healthey"),
-                    Err(e) => print!("api error: {e}"),
-                }
-            }
-            _ => println!("not an option"),
+
+            let mut buff = String::new();
+            println!("what chat do you want to see");
+
+            std::io::stdin().read_line(&mut buff)?;
+            print!("{}[2J{}[1;1H", 27 as char, 27 as char);
         }
+        show_messages(&login, selected_id).await.unwrap();
     }
-    // let user_info = login().await.unwrap();
-    // let res = get_chats(&user_info).await.unwrap();
-    // let chat_id = res.data[0].chat_id;
-    //
-    // let messages = get_messages(user_info.token.clone(), chat_id)
-    //     .await
-    //     .unwrap();
-    // for m in messages {
-    //     println!("{}: {}", m.username, m.content)
-    // }
 }
 
 #[derive(Deserialize)]

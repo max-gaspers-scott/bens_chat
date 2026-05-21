@@ -1,7 +1,10 @@
 // minio stuff
+use dotenv::dotenv;
 use minio_rsc::Minio;
 use minio_rsc::client::PresignedArgs;
 use minio_rsc::provider::StaticProvider;
+use reqwest::header::{ACCEPT, CONTENT_TYPE as CT};
+use serde::{Deserialize, Serialize};
 
 mod auth;
 mod models;
@@ -13,6 +16,7 @@ use axum::{
     http::{
         HeaderValue, Method, StatusCode,
         header::{AUTHORIZATION, CONTENT_TYPE},
+        request,
     },
     middleware,
     response::{Html, IntoResponse},
@@ -20,7 +24,6 @@ use axum::{
 };
 use bcrypt::{DEFAULT_COST, hash, verify};
 use core::str;
-use serde::Deserialize;
 use serde_json::{Value, json};
 use sqlx::{PgPool, postgres::PgPoolOptions};
 use std::{env, result::Result};
@@ -275,12 +278,113 @@ async fn post_message(
         Ok(value) => {
             if value.content.split_once(" ").unwrap().0 == "@gemini" {
                 print!("messge to starts with @gemini");
-                //TODO: make gemini post a responce
-            };
-            Json(json!({"res": "success", "data": value}))
+                let gem_res = gemini(&value.content).await.unwrap();
+
+                Json(json!({"res": "success", "data": value, "gemini": gem_res}))
+            } else {
+                Json(json!({"res": "success", "data": value}))
+            }
         }
         Err(e) => Json(json!({"res": format!("error: {}", e)})),
     }
+}
+#[derive(Deserialize, Debug, Serialize)]
+struct Part {
+    text: String,
+}
+
+#[derive(Deserialize, Debug, Serialize)]
+struct Content {
+    parts: Vec<Part>,
+}
+
+#[derive(Deserialize, Debug, Serialize)]
+struct Candidate {
+    content: ContentResponse,
+}
+
+#[derive(Deserialize, Debug, Serialize)]
+struct ContentResponse {
+    parts: Vec<PartResponse>,
+}
+
+#[derive(Deserialize, Debug, Serialize)]
+struct PartResponse {
+    text: String,
+}
+
+#[derive(Deserialize, Debug, Serialize)]
+struct GenerateContentResponse {
+    contents: Vec<Content>,
+}
+
+#[derive(Deserialize, Debug, Serialize)]
+struct GeminiRespons {
+    candidates: Vec<Candidate>,
+}
+
+async fn gemini(message: &str) -> Result<String, reqwest::Error> {
+    dotenv().ok();
+    let api_key_name = "GEMINI_API_KEY";
+    let api_key: String = match env::var(api_key_name) {
+        Ok(val) => val.trim().to_string(),
+        Err(e) => {
+            println!("couldn't interpret {api_key_name}: {e}");
+            format!("{}", e)
+        }
+    };
+
+    let url = format!(
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={}",
+        api_key
+    );
+
+    // 3. Construct the Request Body using the Serde structs
+    let request_body = GenerateContentResponse {
+        contents: vec![Content {
+            parts: vec![Part {
+                text: message.to_string(),
+            }],
+        }],
+    };
+
+    let client = reqwest::Client::new();
+    let response = client
+        .post(&url)
+        .header(CT, "application/json")
+        .header(ACCEPT, "application/json")
+        // reqwest::Client::post() automatically uses the body's Serialize implementation
+        // and sets the Content-Length header when sending the request body.
+        .json(&request_body)
+        .send()
+        .await?;
+
+    let text = if response.status().is_success() {
+        // Deserialize the JSON response into our Rust struct
+        let json_response: GeminiRespons = response.json().await?;
+
+        // TODO: should not return "" insted do better error handeling
+        // program should not continue with empty string is somthing goes wrong at this step
+        if let Some(candidate) = json_response.candidates.first() {
+            if let Some(part) = candidate.content.parts.first() {
+                part.text.to_string()
+            } else {
+                println!("could not get part.text from api");
+                "".to_string()
+            }
+        } else {
+            println!("Response was successful but had no candidates.");
+            "".to_string()
+        }
+    } else {
+        eprintln!("\n❌ API Request Failed!");
+        eprintln!("Status: {}", response.status());
+        eprintln!("Body: {}", response.text().await?);
+        "".to_string()
+    };
+
+    println!("Generated text: {}", text);
+    Ok(text)
 }
 
 async fn post_user(

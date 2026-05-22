@@ -105,12 +105,15 @@ async fn send_message(
         "content": message,
     });
 
-    let _ = client
+    let send_res = client
         .post(url)
         .json(&payload)
         .bearer_auth(login.token.clone())
         .send()
         .await?;
+    if message.split_once(" ").unwrap().0 == "@gemini" {
+        println!("{:?}", send_res);
+    }
     Ok(())
 }
 

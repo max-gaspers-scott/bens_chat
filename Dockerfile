@@ -67,5 +67,6 @@ USER appuser
 EXPOSE 8081
 
 # Start the server
+ENV STATIC_DIR=/app/frontend/build
 CMD ["/app/bens_chat2"]
 

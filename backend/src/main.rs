@@ -104,20 +104,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let static_dir = env::var("STATIC_DIR").unwrap_or_else(|_| "../frontend/build".to_string());
-    let not_found_dir = static_dir.clone();
-    let static_service = ServeDir::new(static_dir).not_found_service(service_fn(move |_req| {
-        let dir = not_found_dir.clone();
-        async move {
-            match tokio::fs::read_to_string(dir + "/index.html").await {
-                Ok(body) => Ok((StatusCode::OK, Html(body)).into_response()),
-                Err(err) => Ok((
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    format!("Failed to read index.html: {}", err),
-                )
-                    .into_response()),
+    let static_dir_path = std::path::PathBuf::from(&static_dir);
+
+    let static_service = ServeDir::new(&static_dir)
+        .append_index_html_on_directories(true)
+        .not_found_service(service_fn(move |_req| {
+            let index_path = static_dir_path.join("index.html");
+            async move {
+                match tokio::fs::read_to_string(&index_path).await {
+                    Ok(body) => Ok((StatusCode::OK, Html(body)).into_response()),
+                    Err(err) => {
+                        let full_path = std::env::current_dir()
+                            .map(|p| p.join(&index_path))
+                            .unwrap_or(index_path.clone());
+                        Ok((
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            format!("Failed to read index.html at {:?}: {}", full_path, err),
+                        )
+                            .into_response())
+                    }
+                }
             }
-        }
-    }));
+        }));
 
     let public_routes = Router::new()
         .route("/health", get(health))
@@ -253,6 +261,9 @@ async fn get_message_id_sender_id_content_sent_at_chat_id(
     }
 }
 
+//TODO: @gemini is bad solution
+//should check if the chat is with a user named "gemini" and no other users and if so post gemini
+//respoce
 async fn post_message(
     Extension(auth_user): Extension<AuthUser>,
     extract::State(pool): extract::State<PgPool>,
@@ -267,10 +278,10 @@ async fn post_message(
     let result = sqlx::query_as::<_, Message>(
         "INSERT INTO messages (chat_id, sender_id, content, minio_url) VALUES ($1, $2, $3, $4) RETURNING *",
     )
-    .bind(payload.chat_id)
-    .bind(auth_user.user_id)
-    .bind(payload.content)
-    .bind(payload.minio_url)
+    .bind(&payload.chat_id)
+    .bind(&auth_user.user_id)
+    .bind(&payload.content)
+    .bind(&payload.minio_url)
     .fetch_one(&pool)
     .await;
 
@@ -279,8 +290,12 @@ async fn post_message(
             if value.content.split_once(" ").unwrap().0 == "@gemini" {
                 print!("messge to starts with @gemini");
                 let gem_res = gemini(&value.content).await.unwrap();
+                sqlx::query_as::<_, Message>(
+                    "INSERT INTO messages (chat_id, sender_id, content, minio_url) VALUES ($1, $2, $3, $4) RETURNING *",
+                )
+                .bind(payload.chat_id).bind(auth_user.user_id).bind(gem_res).bind(payload.minio_url).fetch_one(&pool).await;
 
-                Json(json!({"res": "success", "data": value, "gemini": gem_res}))
+                Json(json!({"res": "success", "data": value})) //TODO: duplicat code pull out of if
             } else {
                 Json(json!({"res": "success", "data": value}))
             }

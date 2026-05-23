@@ -342,7 +342,10 @@ async fn gemini(message: &str) -> Result<String, reqwest::Error> {
     dotenv().ok();
     let api_key_name = "GEMINI_API_KEY";
     let api_key: String = match env::var(api_key_name) {
-        Ok(val) => val.trim().to_string(),
+        Ok(val) => {
+            println!("keys is: {val}");
+            val.trim().to_string()
+        }
         Err(e) => {
             println!("couldn't interpret {api_key_name}: {e}");
             format!("{}", e)

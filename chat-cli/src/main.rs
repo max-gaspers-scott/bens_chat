@@ -6,7 +6,7 @@ use std::io::Write;
 use uuid::Uuid;
 
 async fn get_health() -> Result<(), reqwest::Error> {
-    let url = "http://localhost:9821/health";
+    let url = "http://localhost:8081/health";
     let body = reqwest::get(url).await?.text().await?;
     println!("resp is: {body:?}");
     Ok(())
@@ -37,7 +37,7 @@ async fn get_messages(
     chat_id: &Uuid,
 ) -> Result<Vec<Message>, reqwest::Error> {
     println!("chat-id id: {:?}", chat_id);
-    let url = format!("http://localhost:9821/messages?chat_id={}", chat_id);
+    let url = format!("http://localhost:8081/messages?chat_id={}", chat_id);
 
     let client = Client::new();
 
@@ -73,7 +73,7 @@ async fn get_chats(user_info: &LoginPayload) -> Result<ChatResponce, reqwest::Er
     println!("{}", user_info.user_id);
     println!("{}", user_info.token);
     let url = format!(
-        "http://localhost:9821/user-chats?user_id={}",
+        "http://localhost:8081/user-chats?user_id={}",
         user_info.user_id
     );
 
@@ -97,7 +97,7 @@ async fn send_message(
     message: &str,
     chat_id: &Uuid,
 ) -> Result<(), reqwest::Error> {
-    let url = format!("http://localhost:9821/messages?chat_id={}", chat_id);
+    let url = format!("http://localhost:8081/messages?chat_id={}", chat_id);
     let client = reqwest::Client::new();
 
     let payload = serde_json::json!({
@@ -111,15 +111,12 @@ async fn send_message(
         .bearer_auth(login.token.clone())
         .send()
         .await?;
-    if message.split_once(" ").unwrap().0 == "@gemini" {
-        println!("{:?}", send_res);
-    }
     Ok(())
 }
 
 async fn show_messages(login: &LoginPayload, selected_id: &Uuid) -> Result<(), reqwest::Error> {
     let messages = get_messages(&login, selected_id).await.unwrap();
-    print!("{}[2J{}[1;1H", 27 as char, 27 as char);
+    // print!("{}[2J{}[1;1H", 27 as char, 27 as char);
     for m in messages {
         println!("{}: {}", m.username, m.content);
     }
@@ -153,7 +150,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     loop {
         let mut message = String::new();
         std::io::stdin().read_line(&mut message)?;
-        send_message(&login, &message, selected_id).await.unwrap();
+        match send_message(&login, &message, selected_id).await {
+            Ok(_) => {}
+            Err(e) => print!("error sendimg message: {e}"),
+        }
         let input = buff.trim();
         let selected_id = hashmap.get(input).unwrap();
         if message.trim() == "/update" {
@@ -172,7 +172,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("what chat do you want to see");
 
             std::io::stdin().read_line(&mut buff)?;
-            print!("{}[2J{}[1;1H", 27 as char, 27 as char);
+            // print!("{}[2J{}[1;1H", 27 as char, 27 as char);
         }
         show_messages(&login, selected_id).await.unwrap();
     }
@@ -211,7 +211,7 @@ async fn login() -> Result<LoginPayload, reqwest::Error> {
     let password = password.trim();
     let name = name.trim();
 
-    let url = "http://localhost:9821/auth/login";
+    let url = "http://localhost:8081/auth/login";
     let mut params = HashMap::new();
     params.insert("username", name);
     params.insert("password", password);
@@ -236,7 +236,7 @@ async fn login() -> Result<LoginPayload, reqwest::Error> {
         Err(e) => println!("write fiel error: {}", e),
     }
 
-    print!("{}[2J{}[1;1H", 27 as char, 27 as char);
+    // print!("{}[2J{}[1;1H", 27 as char, 27 as char);
     println!("loged in as: {}", params.get("username").unwrap());
     Ok(user_info)
 }

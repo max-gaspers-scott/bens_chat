@@ -5,16 +5,8 @@ use std::fs::OpenOptions;
 use std::io::Write;
 use uuid::Uuid;
 
-async fn get_health() -> Result<(), reqwest::Error> {
-    let url = "http://localhost:8081/health";
-    let body = reqwest::get(url).await?.text().await?;
-    println!("resp is: {body:?}");
-    Ok(())
-}
-
-// async fn get_username(token: String, user_id: String) -> Resutl<String, reqwest::Error> {
-//     let url = format!("http://localhost:9821/users");
-// }
+// should be in env, but this will work for now
+const PORT: u32 = 8081;
 
 #[derive(Debug, serde::Deserialize)]
 struct MessageResponce {
@@ -37,7 +29,7 @@ async fn get_messages(
     chat_id: &Uuid,
 ) -> Result<Vec<Message>, reqwest::Error> {
     println!("chat-id id: {:?}", chat_id);
-    let url = format!("http://localhost:8081/messages?chat_id={}", chat_id);
+    let url = format!("http://localhost:PORT/messages?chat_id={}", chat_id);
 
     let client = Client::new();
 
@@ -73,7 +65,7 @@ async fn get_chats(user_info: &LoginPayload) -> Result<ChatResponce, reqwest::Er
     println!("{}", user_info.user_id);
     println!("{}", user_info.token);
     let url = format!(
-        "http://localhost:8081/user-chats?user_id={}",
+        "http://localhost:PORT/user-chats?user_id={}",
         user_info.user_id
     );
 
@@ -97,7 +89,7 @@ async fn send_message(
     message: &str,
     chat_id: &Uuid,
 ) -> Result<(), reqwest::Error> {
-    let url = format!("http://localhost:8081/messages?chat_id={}", chat_id);
+    let url = format!("http://localhost:PORT/messages?chat_id={}", chat_id);
     let client = reqwest::Client::new();
 
     let payload = serde_json::json!({
@@ -115,8 +107,53 @@ async fn send_message(
 }
 
 async fn show_messages(login: &LoginPayload, selected_id: &Uuid) -> Result<(), reqwest::Error> {
+    // TODO: be less stupid about how to tell wehn the user is making a new chat
+    // maybe time to go back to fsa for movign between create_chat, chat, and pick_chat states
+    if selected_id
+        == &Uuid::parse_str("00000000-0000-0000-0000-000000000000").expect("Error getting 0 uuid")
+    {
+        let mut name_buff = String::new();
+        println!("what would you like the new chat to be called");
+        std::io::stdin()
+            .read_line(&mut name_buff)
+            .expect("could not read input buffer");
+        let mut recipiant_buffer = String::new();
+        println!("who do you want to add to the chat");
+        std::io::stdin()
+            .read_line(&mut recipiant_buffer)
+            .expect("could not read input buffer");
+
+        // url parame nesisary ???
+        let url = format!("http://localhost:PORT/chat?chat_name={}", name_buff);
+        let client = reqwest::Client::new();
+
+        let payload = serde_json::json!({
+            "chat_name": name_buff,
+        });
+
+        let send_res = client
+            .post(url)
+            .json(&payload)
+            .bearer_auth(login.token.clone())
+            .send()
+            .await?;
+        //
+        // let url = format!("http://localhost:PORT/user_chats");
+        // let client = reqwest::Client::new();
+        //
+        // let payload = serde_json::json!({
+        //     "chat_name": name_buff,
+        // });
+        //
+        // let send_res = client
+        //     .post(url)
+        //     .json(&payload)
+        //     .bearer_auth(login.token.clone())
+        //     .send()
+        //     .await?;
+    }
     let messages = get_messages(&login, selected_id).await.unwrap();
-    // print!("{}[2J{}[1;1H", 27 as char, 27 as char);
+    print!("{}[2J{}[1;1H", 27 as char, 27 as char);
     for m in messages {
         println!("{}: {}", m.username, m.content);
     }
@@ -155,7 +192,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Err(e) => print!("error sendimg message: {e}"),
         }
         let input = buff.trim();
-        let selected_id = hashmap.get(input).unwrap();
+        let mut selected_id = hashmap.get(input).unwrap();
         if message.trim() == "/update" {
             show_messages(&login, selected_id).await.unwrap();
         }
@@ -167,12 +204,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("chat: {}", c.chat_name);
                 hashmap.insert(c.chat_name, c.chat_id);
             }
+            // 74f3e359-97b1-4db0-82bc-fc83fd79471d
+            // 00000000-0000-0000-0000-000000000000
+            hashmap.insert(
+                "new".to_string(),
+                Uuid::parse_str("00000000-0000-0000-0000-000000000000")
+                    .expect("Error getting 0 uuid"),
+            );
 
             let mut buff = String::new();
             println!("what chat do you want to see");
 
             std::io::stdin().read_line(&mut buff)?;
-            // print!("{}[2J{}[1;1H", 27 as char, 27 as char);
+            // selected_id = hashmap.get(&buff).unwrap();
+
+            print!("{}[2J{}[1;1H", 27 as char, 27 as char);
         }
         show_messages(&login, selected_id).await.unwrap();
     }
@@ -211,7 +257,7 @@ async fn login() -> Result<LoginPayload, reqwest::Error> {
     let password = password.trim();
     let name = name.trim();
 
-    let url = "http://localhost:8081/auth/login";
+    let url = "http://localhost:PORT/auth/login";
     let mut params = HashMap::new();
     params.insert("username", name);
     params.insert("password", password);
@@ -236,7 +282,7 @@ async fn login() -> Result<LoginPayload, reqwest::Error> {
         Err(e) => println!("write fiel error: {}", e),
     }
 
-    // print!("{}[2J{}[1;1H", 27 as char, 27 as char);
+    print!("{}[2J{}[1;1H", 27 as char, 27 as char);
     println!("loged in as: {}", params.get("username").unwrap());
     Ok(user_info)
 }

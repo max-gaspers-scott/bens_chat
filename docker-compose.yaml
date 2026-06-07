@@ -55,6 +55,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    env_file:
+      - ./backend/.env
     ports:
       - "9821:8081"
     environment:
@@ -76,7 +78,7 @@ services:
 
     restart: on-failure
     healthcheck:
-      test: ["CMD", "wget", "--spider", "http://localhost:8081/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
       interval: 10s
       timeout: 5s
       retries: 5

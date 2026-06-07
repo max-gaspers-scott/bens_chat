@@ -45,8 +45,8 @@ RUN npm run build
 # -----------------------------------------------------------------------------
 FROM debian:bookworm-slim AS runtime
 
-# Install certificates (TLS) & clean apt caches
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates libssl3 && rm -rf /var/lib/apt/lists/*
+# Install certificates (TLS), curl, & clean apt caches
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates libssl3 curl && rm -rf /var/lib/apt/lists/*
 
 # Create an unprivileged user to run the app
 RUN useradd -m -u 10001 appuser

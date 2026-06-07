@@ -287,18 +287,24 @@ async fn post_message(
 
     match result {
         Ok(value) => {
-            if value.content.split_once(" ").unwrap().0 == "@gemini" {
-                print!("messge to starts with @gemini");
-                let gem_res = gemini(&value.content).await.unwrap();
-                sqlx::query_as::<_, Message>(
+            let first_word = value.content.split_whitespace().next().unwrap_or("");
+            if first_word == "@gemini" {
+                println!("message starts with @gemini");
+                let gem_res = match gemini(&value.content).await {
+                    Ok(res) => res,
+                    Err(e) => format!("Error generating content: {}", e),
+                };
+                let _ = sqlx::query_as::<_, Message>(
                     "INSERT INTO messages (chat_id, sender_id, content, minio_url) VALUES ($1, $2, $3, $4) RETURNING *",
                 )
-                .bind(payload.chat_id).bind(auth_user.user_id).bind(gem_res).bind(payload.minio_url).fetch_one(&pool).await;
-
-                Json(json!({"res": "success", "data": value})) //TODO: duplicat code pull out of if
-            } else {
-                Json(json!({"res": "success", "data": value}))
+                .bind(payload.chat_id)
+                .bind(auth_user.user_id)
+                .bind(gem_res)
+                .bind(payload.minio_url)
+                .fetch_one(&pool)
+                .await;
             }
+            Json(json!({"res": "success", "data": value}))
         }
         Err(e) => Json(json!({"res": format!("error: {}", e)})),
     }

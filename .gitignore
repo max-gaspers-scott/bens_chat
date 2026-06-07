@@ -12,8 +12,15 @@ Thumbs.db
 .env
 .env.local
 
+# Chat CLI tokens
+chat-cli/token.txt
+chat-cli/tokien.txt
+token.txt
+tokien.txt
+
 # Build and dependencies (catch-all)
 node_modules/
 target/
 build/
 dist/
+

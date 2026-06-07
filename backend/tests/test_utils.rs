@@ -1,6 +1,7 @@
 //! Test utilities for database setup, data seeding, and cleanup
 
-use sqlx::{PgPool, PgPoolOptions};
+use sqlx::PgPool;
+use sqlx::postgres::PgPoolOptions;
 use std::env;
 use std::process::Command;
 use tokio::time::{sleep, Duration};
@@ -59,7 +60,7 @@ pub async fn setup_test_database() -> Result<PgPool, Box<dyn std::error::Error>>
     let pool = create_test_database_pool().await?;
     
     // Run migrations
-    sqlx::migrate!("../migrations")
+    sqlx::migrate!("./migrations")
         .run(&pool)
         .await
         .map_err(|e| format!("Failed to run migrations: {}", e))?;

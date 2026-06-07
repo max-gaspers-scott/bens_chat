@@ -1,14 +1,95 @@
+use clap::error::ContextKind;
+use core::slice;
 use reqwest::{self, Client};
 use serde::Deserialize;
+use std::alloc::handle_alloc_error;
 use std::collections::HashMap;
 use std::fmt::format;
 use std::fs::OpenOptions;
 use std::io::Write;
+use std::sync::Condvar;
 use uuid::Uuid;
 
 // should be in env, but this will work for now
 // const PORT: u32 = 8081;
 const BASE_URL: &str = "http://localhost:9821";
+
+#[derive(Debug)]
+enum Stats {
+    Login,
+    Chats,        // viewing  creating and deleating chats
+    Conversation, // viewing and sending messages
+}
+
+#[derive(Debug)]
+enum Acction {
+    Logout,
+    Login,
+    GotoChats,
+    GotoConversation,
+}
+
+struct Window {
+    state: Stats,
+}
+impl Window {
+    fn new() -> Window {
+        Window {
+            state: Stats::Login,
+        }
+    }
+    fn transition(&mut self, acction: Acction) {
+        match (&self.state, acction) {
+            (Stats::Login, Acction::Login) => self.state = Stats::Chats,
+            (Stats::Chats, Acction::GotoConversation) => self.state = Stats::Conversation,
+            (Stats::Conversation, Acction::GotoChats) => self.state = Stats::Chats,
+            (_, Acction::Logout) => self.state = Stats::Login,
+            (_, _) => self.state = Stats::Login,
+        };
+    }
+    fn run(&mut self) {
+        loop {
+            // Match the state, execute the screen logic, and get the resulting action
+            let action = match self.state {
+                Stats::Login => self.handel_login(),
+                Stats::Chats => self.handel_chats(),
+                Stats::Conversation => self.handel_conversation(),
+            };
+
+            println!("acction: {:?}", action);
+
+            // Transition the state based on what happened in the screen
+            self.transition(action);
+        }
+    }
+    fn handel_login(&mut self) -> Acction {
+        println!("handel login");
+        let mut name_buff = String::new();
+        std::io::stdin()
+            .read_line(&mut name_buff)
+            .expect("could not read input buffer");
+
+        Acction::Login
+    }
+    fn handel_chats(&mut self) -> Acction {
+        println!("doing chats ");
+        let mut name_buff = String::new();
+        std::io::stdin()
+            .read_line(&mut name_buff)
+            .expect("could not read input buffer");
+
+        Acction::GotoConversation
+    }
+    fn handel_conversation(&mut self) -> Acction {
+        println!("handeling messages/convos ");
+        let mut name_buff = String::new();
+        std::io::stdin()
+            .read_line(&mut name_buff)
+            .expect("could not read input buffer");
+
+        Acction::GotoChats
+    }
+}
 
 #[derive(Debug, serde::Deserialize)]
 struct MessageResponce {
@@ -161,66 +242,68 @@ async fn show_messages(login: &LoginPayload, selected_id: &Uuid) -> Result<(), r
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut fsa: HashMap<State, State> = HashMap::new();
-    fsa.insert(State::Chats, State::Messages);
-    let login = login().await?;
-
-    let chats_raw = get_chats(&login);
-    let chats = chats_raw.await.unwrap().data;
-    let mut hashmap = HashMap::new();
-
-    for c in chats {
-        println!("chat: {}", c.chat_name);
-        hashmap.insert(c.chat_name, c.chat_id);
-    }
-
-    let mut buff = String::new();
-    println!("what chat do you want to see");
-
-    std::io::stdin().read_line(&mut buff).unwrap();
-    let input = buff.trim();
-    let selected_id = hashmap.get(input).unwrap();
-
-    show_messages(&login, selected_id).await.unwrap();
-
-    loop {
-        let mut message = String::new();
-        std::io::stdin().read_line(&mut message)?;
-        match send_message(&login, &message, selected_id).await {
-            Ok(_) => {}
-            Err(e) => print!("error sendimg message: {e}"),
-        }
-        let input = buff.trim();
-        let mut selected_id = hashmap.get(input).unwrap();
-        if message.trim() == "/update" {
-            show_messages(&login, selected_id).await.unwrap();
-        }
-        if message.trim() == "/exit" {
-            let chats_raw = get_chats(&login);
-            let chats = chats_raw.await.unwrap().data;
-            let mut hashmap = HashMap::new();
-            for c in chats {
-                println!("chat: {}", c.chat_name);
-                hashmap.insert(c.chat_name, c.chat_id);
-            }
-            // 74f3e359-97b1-4db0-82bc-fc83fd79471d
-            // 00000000-0000-0000-0000-000000000000
-            hashmap.insert(
-                "new".to_string(),
-                Uuid::parse_str("00000000-0000-0000-0000-000000000000")
-                    .expect("Error getting 0 uuid"),
-            );
-
-            let mut buff = String::new();
-            println!("what chat do you want to see");
-
-            std::io::stdin().read_line(&mut buff)?;
-            // selected_id = hashmap.get(&buff).unwrap();
-
-            print!("{}[2J{}[1;1H", 27 as char, 27 as char);
-        }
-        show_messages(&login, selected_id).await.unwrap();
-    }
+    let mut app = Window::new();
+    app.run();
+    Ok(())
+    //
+    // let login = login().await?;
+    //
+    // let chats_raw = get_chats(&login);
+    // let chats = chats_raw.await.unwrap().data;
+    // let mut hashmap = HashMap::new();
+    //
+    // for c in chats {
+    //     println!("chat: {}", c.chat_name);
+    //     hashmap.insert(c.chat_name, c.chat_id);
+    // }
+    //
+    // let mut buff = String::new();
+    // println!("what chat do you want to see");
+    //
+    // std::io::stdin().read_line(&mut buff).unwrap();
+    // let input = buff.trim();
+    // let selected_id = hashmap.get(input).unwrap();
+    //
+    // show_messages(&login, selected_id).await.unwrap();
+    //
+    // loop {
+    //     let mut message = String::new();
+    //     std::io::stdin().read_line(&mut message)?;
+    //     match send_message(&login, &message, selected_id).await {
+    //         Ok(_) => {}
+    //         Err(e) => print!("error sendimg message: {e}"),
+    //     }
+    //     let input = buff.trim();
+    //     let mut selected_id = hashmap.get(input).unwrap();
+    //     if message.trim() == "/update" {
+    //         show_messages(&login, selected_id).await.unwrap();
+    //     }
+    //     if message.trim() == "/exit" {
+    //         let chats_raw = get_chats(&login);
+    //         let chats = chats_raw.await.unwrap().data;
+    //         let mut hashmap = HashMap::new();
+    //         for c in chats {
+    //             println!("chat: {}", c.chat_name);
+    //             hashmap.insert(c.chat_name, c.chat_id);
+    //         }
+    //         // 74f3e359-97b1-4db0-82bc-fc83fd79471d
+    //         // 00000000-0000-0000-0000-000000000000
+    //         hashmap.insert(
+    //             "new".to_string(),
+    //             Uuid::parse_str("00000000-0000-0000-0000-000000000000")
+    //                 .expect("Error getting 0 uuid"),
+    //         );
+    //
+    //         let mut buff = String::new();
+    //         println!("what chat do you want to see");
+    //
+    //         std::io::stdin().read_line(&mut buff)?;
+    //         // selected_id = hashmap.get(&buff).unwrap();
+    //
+    //         print!("{}[2J{}[1;1H", 27 as char, 27 as char);
+    //     }
+    //     show_messages(&login, selected_id).await.unwrap();
+    // }
 }
 
 #[derive(Deserialize)]

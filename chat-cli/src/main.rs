@@ -1,12 +1,14 @@
 use reqwest::{self, Client};
 use serde::Deserialize;
 use std::collections::HashMap;
+use std::fmt::format;
 use std::fs::OpenOptions;
 use std::io::Write;
 use uuid::Uuid;
 
 // should be in env, but this will work for now
-const PORT: u32 = 8081;
+// const PORT: u32 = 8081;
+const BASE_URL: &str = "http://localhost:9821";
 
 #[derive(Debug, serde::Deserialize)]
 struct MessageResponce {
@@ -29,7 +31,7 @@ async fn get_messages(
     chat_id: &Uuid,
 ) -> Result<Vec<Message>, reqwest::Error> {
     println!("chat-id id: {:?}", chat_id);
-    let url = format!("http://localhost:PORT/messages?chat_id={}", chat_id);
+    let url = format!("{BASE_URL}/messages?chat_id={}", chat_id);
 
     let client = Client::new();
 
@@ -64,10 +66,7 @@ struct Chat {
 async fn get_chats(user_info: &LoginPayload) -> Result<ChatResponce, reqwest::Error> {
     println!("{}", user_info.user_id);
     println!("{}", user_info.token);
-    let url = format!(
-        "http://localhost:PORT/user-chats?user_id={}",
-        user_info.user_id
-    );
+    let url = format!("{BASE_URL}/user-chats?user_id={}", user_info.user_id);
 
     let client = reqwest::Client::new();
     let res = client.get(url).bearer_auth(&user_info.token).send().await?;
@@ -89,7 +88,7 @@ async fn send_message(
     message: &str,
     chat_id: &Uuid,
 ) -> Result<(), reqwest::Error> {
-    let url = format!("http://localhost:PORT/messages?chat_id={}", chat_id);
+    let url = format!("{BASE_URL}/messages?chat_id={}", chat_id);
     let client = reqwest::Client::new();
 
     let payload = serde_json::json!({
@@ -124,7 +123,7 @@ async fn show_messages(login: &LoginPayload, selected_id: &Uuid) -> Result<(), r
             .expect("could not read input buffer");
 
         // url parame nesisary ???
-        let url = format!("http://localhost:PORT/chat?chat_name={}", name_buff);
+        let url = format!("BASE_URL/chat?chat_name={}", name_buff);
         let client = reqwest::Client::new();
 
         let payload = serde_json::json!({
@@ -257,7 +256,7 @@ async fn login() -> Result<LoginPayload, reqwest::Error> {
     let password = password.trim();
     let name = name.trim();
 
-    let url = "http://localhost:PORT/auth/login";
+    let url = format!("{BASE_URL}/auth/login");
     let mut params = HashMap::new();
     params.insert("username", name);
     params.insert("password", password);

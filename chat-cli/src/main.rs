@@ -17,8 +17,8 @@ const BASE_URL: &str = "http://localhost:9821";
 #[derive(Debug)]
 enum Stats {
     Login,
-    Chats,        // viewing  creating and deleating chats
-    Conversation, // viewing and sending messages
+    Chats,                          // viewing  creating and deleating chats
+    Conversation { chat_id: Uuid }, // viewing and sending messages
 }
 
 #[derive(Debug)]
@@ -26,34 +26,43 @@ enum Acction {
     Logout,
     Login,
     GotoChats,
-    GotoConversation,
+    GotoConversation { chat_id: Uuid },
+}
+
+enum LoginInfo {
+    Logedin { info: LoginPayload },
+    Not_logedin,
 }
 
 struct Window {
     state: Stats,
+    login: LoginInfo,
 }
 impl Window {
     fn new() -> Window {
         Window {
             state: Stats::Login,
+            login: LoginInfo::Not_logedin,
         }
     }
     fn transition(&mut self, acction: Acction) {
         match (&self.state, acction) {
             (Stats::Login, Acction::Login) => self.state = Stats::Chats,
-            (Stats::Chats, Acction::GotoConversation) => self.state = Stats::Conversation,
-            (Stats::Conversation, Acction::GotoChats) => self.state = Stats::Chats,
+            (Stats::Chats, Acction::GotoConversation { chat_id }) => {
+                self.state = Stats::Conversation { chat_id: chat_id }
+            }
+            (Stats::Conversation { chat_id }, Acction::GotoChats) => self.state = Stats::Chats,
             (_, Acction::Logout) => self.state = Stats::Login,
-            (_, _) => self.state = Stats::Login,
+            _ => self.state = Stats::Login,
         };
     }
-    fn run(&mut self) {
+    async fn run(&mut self) {
         loop {
             // Match the state, execute the screen logic, and get the resulting action
-            let action = match self.state {
-                Stats::Login => self.handel_login(),
-                Stats::Chats => self.handel_chats(),
-                Stats::Conversation => self.handel_conversation(),
+            let action = match &self.state {
+                Stats::Login => self.handel_login().await,
+                Stats::Chats => self.handel_chats().await,
+                Stats::Conversation { chat_id } => self.handel_conversation(chat_id).await,
             };
 
             println!("acction: {:?}", action);
@@ -62,25 +71,47 @@ impl Window {
             self.transition(action);
         }
     }
-    fn handel_login(&mut self) -> Acction {
-        println!("handel login");
-        let mut name_buff = String::new();
-        std::io::stdin()
-            .read_line(&mut name_buff)
-            .expect("could not read input buffer");
+    async fn handel_login(&mut self) -> Acction {
+        self.login = LoginInfo::Logedin {
+            info: login().await.unwrap(),
+        };
+
+        let uid = match &self.login {
+            LoginInfo::Logedin { info } => &info.user_id,
+            LoginInfo::Not_logedin => &String::from("no user id"),
+        };
+        println!("{uid}");
 
         Acction::Login
     }
-    fn handel_chats(&mut self) -> Acction {
-        println!("doing chats ");
-        let mut name_buff = String::new();
-        std::io::stdin()
-            .read_line(&mut name_buff)
-            .expect("could not read input buffer");
+    async fn handel_chats(&mut self) -> Acction {
+        let login = match &self.login {
+            LoginInfo::Logedin { info } => info,
+            LoginInfo::Not_logedin => panic!(), //should never git to this point without login info
+                                                //because we have to go thought login to get here
+                                                //and if login fails the unwrap will panic
+        };
+        let chats_raw = get_chats(login);
+        let chats = chats_raw.await.unwrap().data;
+        let mut hashmap = HashMap::new();
 
-        Acction::GotoConversation
+        for c in chats {
+            println!("chat: {}", c.chat_name);
+            hashmap.insert(c.chat_name, c.chat_id);
+        }
+
+        let mut buff = String::new();
+        println!("what chat do you want to see");
+
+        std::io::stdin().read_line(&mut buff).unwrap();
+        let input = buff.trim();
+        let selected_id = hashmap.get(input).unwrap();
+
+        Acction::GotoConversation {
+            chat_id: *selected_id,
+        }
     }
-    fn handel_conversation(&mut self) -> Acction {
+    async fn handel_conversation(&mut self, chat_id: Uuid) -> Acction {
         println!("handeling messages/convos ");
         let mut name_buff = String::new();
         std::io::stdin()
@@ -243,7 +274,7 @@ async fn show_messages(login: &LoginPayload, selected_id: &Uuid) -> Result<(), r
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut app = Window::new();
-    app.run();
+    app.run().await;
     Ok(())
     //
     // let login = login().await?;

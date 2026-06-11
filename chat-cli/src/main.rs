@@ -29,9 +29,20 @@ enum Acction {
     GotoConversation { chat_id: Uuid },
 }
 
+#[derive(Deserialize)]
+struct LoginResponse {
+    payload: LoginPayload,
+    status: String,
+}
+
+#[derive(Deserialize, Debug)]
+struct LoginPayload {
+    token: String,
+    user_id: String,
+}
 enum LoginInfo {
     Logedin { info: LoginPayload },
-    Not_logedin,
+    NotLogedin,
 }
 
 struct Window {
@@ -42,7 +53,7 @@ impl Window {
     fn new() -> Window {
         Window {
             state: Stats::Login,
-            login: LoginInfo::Not_logedin,
+            login: LoginInfo::NotLogedin,
         }
     }
     fn transition(&mut self, acction: Acction) {
@@ -62,7 +73,7 @@ impl Window {
             let action = match &self.state {
                 Stats::Login => self.handel_login().await,
                 Stats::Chats => self.handel_chats().await,
-                Stats::Conversation { chat_id } => self.handel_conversation(chat_id).await,
+                Stats::Conversation { chat_id } => self.handel_conversation(*chat_id).await,
             };
 
             println!("acction: {:?}", action);
@@ -73,12 +84,12 @@ impl Window {
     }
     async fn handel_login(&mut self) -> Acction {
         self.login = LoginInfo::Logedin {
-            info: login().await.unwrap(),
+            info: user_login().await.unwrap(),
         };
 
         let uid = match &self.login {
             LoginInfo::Logedin { info } => &info.user_id,
-            LoginInfo::Not_logedin => &String::from("no user id"),
+            LoginInfo::NotLogedin => &String::from("no user id"),
         };
         println!("{uid}");
 
@@ -87,9 +98,9 @@ impl Window {
     async fn handel_chats(&mut self) -> Acction {
         let login = match &self.login {
             LoginInfo::Logedin { info } => info,
-            LoginInfo::Not_logedin => panic!(), //should never git to this point without login info
-                                                //because we have to go thought login to get here
-                                                //and if login fails the unwrap will panic
+            LoginInfo::NotLogedin => panic!(), //should never git to this point without login info
+                                               //because we have to go thought login to get here
+                                               //and if login fails the unwrap will panic
         };
         let chats_raw = get_chats(login);
         let chats = chats_raw.await.unwrap().data;
@@ -113,12 +124,39 @@ impl Window {
     }
     async fn handel_conversation(&mut self, chat_id: Uuid) -> Acction {
         println!("handeling messages/convos ");
+        let login_stuff = match &self.login {
+            LoginInfo::Logedin { info } => Some(info),
+            LoginInfo::NotLogedin => {
+                println!("not loged in");
+                None
+            }
+        }
+        .unwrap();
+        let _ = show_messages(&login_stuff, &chat_id).await;
         let mut name_buff = String::new();
         std::io::stdin()
             .read_line(&mut name_buff)
             .expect("could not read input buffer");
 
-        Acction::GotoChats
+        loop {
+            print!("your message: ");
+            let mut message = String::new();
+            std::io::stdin().read_line(&mut message);
+            match send_message(login_stuff, &message, &chat_id).await {
+                Ok(_) => {}
+                Err(e) => print!("error sendimg message: {e}"),
+            }
+            if message.trim() == "/update" {
+                show_messages(&login_stuff, &chat_id).await.unwrap();
+            }
+            if message.trim() == "/exit" {
+                print!("{}[2J{}[1;1H", 27 as char, 27 as char);
+
+                return Acction::GotoChats;
+            }
+
+            show_messages(&login_stuff, &chat_id).await.unwrap();
+        }
     }
 }
 
@@ -218,6 +256,7 @@ async fn send_message(
 }
 
 async fn show_messages(login: &LoginPayload, selected_id: &Uuid) -> Result<(), reqwest::Error> {
+    println!("running show messages");
     // TODO: be less stupid about how to tell wehn the user is making a new chat
     // maybe time to go back to fsa for movign between create_chat, chat, and pick_chat states
     if selected_id
@@ -337,19 +376,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // }
 }
 
-#[derive(Deserialize)]
-struct LoginResponse {
-    payload: LoginPayload,
-    status: String,
-}
-
-#[derive(Deserialize)]
-struct LoginPayload {
-    token: String,
-    user_id: String,
-}
-
-async fn login() -> Result<LoginPayload, reqwest::Error> {
+async fn user_login() -> Result<LoginPayload, reqwest::Error> {
     println!("what is your name");
     let mut name = String::new();
     match std::io::stdin().read_line(&mut name) {

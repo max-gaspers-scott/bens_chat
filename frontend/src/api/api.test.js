@@ -61,4 +61,20 @@ describe('api auth helpers', () => {
       }),
     );
   });
+
+  test('unauthorized response (401) clears token and triggers callback', async () => {
+    const unauthorizedCallback = jest.fn();
+    api.registerUnauthorizedHandler(unauthorizedCallback);
+    api.setToken('expired-token');
+
+    global.fetch = jest.fn().mockResolvedValue({
+      status: 401,
+      json: jest.fn().mockResolvedValue({ status: 'error', error: 'Invalid bearer token' }),
+    });
+
+    await expect(api.getMessages('chat-1')).rejects.toThrow('Unauthorized');
+
+    expect(api.getToken()).toBeNull();
+    expect(unauthorizedCallback).toHaveBeenCalled();
+  });
 });

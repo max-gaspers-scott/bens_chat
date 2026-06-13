@@ -40,7 +40,25 @@ const authHeaders = () => {
   return headers;
 };
 
+let unauthorizedHandler = null;
+
+const apiFetch = async (url, options = {}) => {
+  const response = await fetch(url, options);
+  if (response.status === 401) {
+    localStorage.removeItem(TOKEN_STORAGE_KEY);
+    if (unauthorizedHandler) {
+      unauthorizedHandler();
+    }
+    throw new Error('Unauthorized');
+  }
+  return response;
+};
+
 export const api = {
+  registerUnauthorizedHandler(handler) {
+    unauthorizedHandler = handler;
+  },
+
   setToken(token) {
     localStorage.setItem(TOKEN_STORAGE_KEY, token);
   },
@@ -55,13 +73,13 @@ export const api = {
 
   // Health check
   async health() {
-    const response = await fetch(`${API_BASE_URL}/health`);
+    const response = await apiFetch(`${API_BASE_URL}/health`);
     return response.text();
   },
 
   // Sign up - create a new user
   async signUp({ username, email, password, phone_number }) {
-    const response = await fetch(`${API_BASE_URL}/users`, {
+    const response = await apiFetch(`${API_BASE_URL}/users`, {
       method: 'POST',
       headers: jsonHeaders(),
       body: JSON.stringify({
@@ -76,7 +94,7 @@ export const api = {
 
   // Login - verify username/password and return a JWT
   async login(username, password) {
-    const response = await fetch(`${API_BASE_URL}/auth/login`, {
+    const response = await apiFetch(`${API_BASE_URL}/auth/login`, {
       method: 'POST',
       headers: jsonHeaders(),
       body: JSON.stringify({ username, password }),
@@ -86,7 +104,7 @@ export const api = {
 
   // Create a new chat
   async createChat(chat_name) {
-    const response = await fetch(`${API_BASE_URL}/chats`, {
+    const response = await apiFetch(`${API_BASE_URL}/chats`, {
       method: 'POST',
       headers: authHeaders(),
       body: JSON.stringify({
@@ -98,7 +116,7 @@ export const api = {
 
   // Link a user to a chat
   async linkUserToChat(user_id, chat_id) {
-    const response = await fetch(`${API_BASE_URL}/user-chats`, {
+    const response = await apiFetch(`${API_BASE_URL}/user-chats`, {
       method: 'POST',
       headers: authHeaders(),
       body: JSON.stringify({ user_id, chat_id }),
@@ -108,7 +126,7 @@ export const api = {
 
   // Get user's chats
   async getUserChats(user_id) {
-    const response = await fetch(`${API_BASE_URL}/user-chats?user_id=${user_id}`, {
+    const response = await apiFetch(`${API_BASE_URL}/user-chats?user_id=${user_id}`, {
       headers: authHeaders(),
     });
     return response.json();
@@ -116,7 +134,7 @@ export const api = {
 
   // Get messages for a chat
   async getMessages(chat_id) {
-    const response = await fetch(`${API_BASE_URL}/messages?chat_id=${chat_id}`, {
+    const response = await apiFetch(`${API_BASE_URL}/messages?chat_id=${chat_id}`, {
       headers: authHeaders(),
     });
     return response.json();
@@ -124,7 +142,7 @@ export const api = {
 
   // Send a message (minio_url is optional — pass the object key if an image was uploaded)
   async sendMessage({ chat_id, content, minio_url }) {
-    const response = await fetch(`${API_BASE_URL}/messages`, {
+    const response = await apiFetch(`${API_BASE_URL}/messages`, {
       method: 'POST',
       headers: authHeaders(),
       body: JSON.stringify({
@@ -138,7 +156,7 @@ export const api = {
 
   // Get a presigned PUT URL + server-generated object key for uploading an image to MinIO
   async getUploadUrl(chatId, fileExtension) {
-    const response = await fetch(
+    const response = await apiFetch(
       `${API_BASE_URL}/minio-post?chat_id=${encodeURIComponent(chatId)}&file_extension=${encodeURIComponent(fileExtension)}`,
       { headers: authHeaders() }
     );
@@ -158,7 +176,7 @@ export const api = {
 
   // Get a presigned GET URL for displaying a stored image
   async getImageUrl(objectKey) {
-    const response = await fetch(
+    const response = await apiFetch(
       `${API_BASE_URL}/minio-fetch?object_key=${encodeURIComponent(objectKey)}`,
       { headers: authHeaders() }
     );
@@ -168,7 +186,7 @@ export const api = {
 
   // Get user by username (for looking up users to add to chat)
   async getUserByUsername(username) {
-    const response = await fetch(`${API_BASE_URL}/users?username=${username}`, {
+    const response = await apiFetch(`${API_BASE_URL}/users?username=${username}`, {
       headers: authHeaders(),
     });
     return response.json();
@@ -176,7 +194,7 @@ export const api = {
 
   // Set/Change password
   async setPassword(new_password) {
-    const response = await fetch(
+    const response = await apiFetch(
       `${API_BASE_URL}/password-set?new_password=${encodeURIComponent(new_password)}`,
       {
         method: 'POST',

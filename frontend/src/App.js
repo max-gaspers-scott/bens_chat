@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import SignUp from './components/SignUp';
 import Login from './components/Login';
 import CreateChat from './components/CreateChat';
@@ -64,13 +64,20 @@ function App() {
     setView('chat');
   };
 
-  const handleLogout = () => {
+  const handleLogout = useCallback(() => {
     api.clearToken();
     localStorage.removeItem(USER_STORAGE_KEY);
     setCurrentUser(null);
     setSelectedChatId(null);
     setView('login');
-  };
+  }, []);
+
+  useEffect(() => {
+    api.registerUnauthorizedHandler(handleLogout);
+    return () => {
+      api.registerUnauthorizedHandler(null);
+    };
+  }, [handleLogout]);
 
   const handleChatCreated = () => {
     // Trigger chat list refresh

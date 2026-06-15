@@ -158,6 +158,32 @@ struct MessageResponce {
     status: String,
 }
 
+pub trait Showable {
+    fn show(&self);
+}
+
+#[derive(Debug, serde::Deserialize)]
+enum ChatMessage {
+    Text(TextMessage),
+    Media(MediaMessage),
+}
+impl Showable for ChatMessage {
+    fn show(&self) {
+        match self {
+            ChatMessage::Text(msg) => msg.show(),
+            ChatMessage::Media(media) => media.show(),
+        }
+    }
+}
+#[derive(Debug, serde::Deserialize)]
+struct TextMessage {
+    message_id: uuid::Uuid,
+    sender_id: uuid::Uuid,
+    content: String,
+    sent_at: String,
+    username: String,
+}
+
 #[derive(Debug, serde::Deserialize)]
 struct Message {
     message_id: uuid::Uuid,
@@ -166,6 +192,46 @@ struct Message {
     sent_at: String,
     minio_url: Option<String>,
     username: String,
+}
+
+impl Message {
+    fn show(&self) {
+        println!("{}: {}", self.username, self.content);
+        if self.minio_url.is_some() {
+            println!("####### some midea #######");
+        };
+    }
+}
+
+impl TextMessage {
+    fn from_message(msg: ChatMessage) -> Option<TextMessage> {
+        match msg {
+            ChatMessage::Text(test_msg) => Some(test_msg),
+            ChatMessage::Media(_) => None,
+        }
+    }
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct MediaMessage {
+    message_id: uuid::Uuid,
+    sender_id: uuid::Uuid,
+    content: String,
+    sent_at: String,
+    minio_url: String,
+    username: String,
+}
+
+impl Showable for MediaMessage {
+    fn show(&self) {
+        println!("######### show an image ########")
+    }
+}
+
+impl Showable for TextMessage {
+    fn show(&self) {
+        println!("username: {}: {}", self.username, self.content);
+    }
 }
 
 async fn get_messages(
@@ -284,7 +350,7 @@ async fn show_messages(login: &LoginPayload, selected_id: &Uuid) -> Result<(), r
     let messages = get_messages(&login, selected_id).await.unwrap();
     print!("{}[2J{}[1;1H", 27 as char, 27 as char);
     for m in messages {
-        println!("{}: {}", m.username, m.content);
+        m.show();
     }
     Ok(())
 }

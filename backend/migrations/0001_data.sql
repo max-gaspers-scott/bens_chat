@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS messages (
     message_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     chat_id UUID NOT NULL REFERENCES chats(chat_id) ON DELETE CASCADE,
     sender_id UUID REFERENCES users(user_id) ON DELETE SET NULL,
-    content TEXT NOT NULL,
+    content JSONB NOT NULL,
     sent_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     minio_url TEXT
 );

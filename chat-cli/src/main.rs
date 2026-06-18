@@ -2,6 +2,7 @@ use clap::error::ContextKind;
 use core::slice;
 use reqwest::{self, Client};
 use serde::Deserialize;
+use serde_json;
 use std::alloc::handle_alloc_error;
 use std::collections::HashMap;
 use std::fmt::format;
@@ -153,6 +154,21 @@ impl Window {
 }
 
 #[derive(Debug, serde::Deserialize)]
+enum MesgTypes {
+    Payload(TextMessage), // should be called Text
+    Media(MediaMessage),
+}
+
+impl Showable for MesgTypes {
+    fn show(&self) {
+        match self {
+            MesgTypes::Payload(msg) => msg.show(),
+            MesgTypes::Media(msg) => msg.show(),
+        }
+    }
+}
+
+#[derive(Debug, serde::Deserialize)]
 struct MessageResponce {
     payload: Vec<Message>,
     status: String,
@@ -248,8 +264,21 @@ async fn get_messages(
         .bearer_auth(login.token.clone())
         .send()
         .await?;
+    // let raw_text = res.text().await?;
+    // println!("RAW JSON FROM BACKEND:\n{}", raw_text);
+    //
+    // let message_response: MessageResponce = serde_json::from_str(&raw_text)
+    //     .map_err(|e| {
+    //         println!("SERDE ERROR DETAILED: {:?}", e);
+    //         e
+    //     })
+    //     .unwrap(); // Temporarily leave unwrap just to see the print statement above
+    let message_responce: MessageResponce = res.json().await.map_err(|e| println!("{e}")).unwrap();
 
-    let message_responce: MessageResponce = res.json().await.unwrap();
+    // .map(|v| {
+    // let data = v.payload;
+    // data
+    // });
     Ok(message_responce.payload)
 
     // let messages = res.text().await?;

@@ -298,7 +298,8 @@ async fn post_message(
                     "INSERT INTO messages (chat_id, sender_id, content, minio_url) VALUES ($1, $2, $3, $4) RETURNING *",
                 )
                 .bind(payload.chat_id)
-                .bind(auth_user.user_id)
+                .bind(auth_user.user_id) // why not gemini a
+                    // hardcoded uuid of gemini??
                 .bind(gem_res)
                 .bind(payload.minio_url)
                 .fetch_one(&pool)

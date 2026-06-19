@@ -1,8 +1,10 @@
 pub mod chat;
 pub use chat::*;
+pub mod chat_participant;
+pub use chat_participant::*;
 pub mod message;
 pub use message::*;
+pub mod note;
+pub use note::*;
 pub mod user;
 pub use user::*;
-pub mod user_chat;
-pub use user_chat::*;

@@ -15,13 +15,11 @@ use uuid::Uuid;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Claims {
     pub sub: String,
-    pub username: String,
     pub exp: usize,
 }
 
 #[derive(Debug, Clone)]
 pub struct AuthUser {
-    pub user_id: Uuid,
     pub username: String,
 }
 
@@ -29,14 +27,13 @@ fn jwt_secret() -> String {
     env::var("JWT_SECRET").unwrap_or_else(|_| "dev-jwt-secret".to_string())
 }
 
-pub fn create_token(user_id: Uuid, username: &str) -> Result<String, jsonwebtoken::errors::Error> {
+pub fn create_token(username: &str) -> Result<String, jsonwebtoken::errors::Error> {
     let exp_hours = env::var("JWT_EXP_HOURS")
         .ok()
         .and_then(|value| value.parse::<i64>().ok())
         .unwrap_or(24);
     let claims = Claims {
-        sub: user_id.to_string(),
-        username: username.to_string(),
+        sub: username.to_string(),
         exp: (Utc::now() + Duration::hours(exp_hours)).timestamp() as usize,
     };
 
@@ -59,8 +56,7 @@ pub fn validate_token(token: &str) -> Result<AuthUser, jsonwebtoken::errors::Err
     })?;
 
     Ok(AuthUser {
-        user_id,
-        username: token_data.claims.username,
+        username: token_data.claims.sub,
     })
 }
 
@@ -106,10 +102,9 @@ mod tests {
     #[test]
     fn token_round_trip_preserves_user_identity() {
         let user_id = Uuid::new_v4();
-        let token = create_token(user_id, "alice").expect("token should be created");
+        let token = create_token("alice").expect("token should be created");
         let auth_user = validate_token(&token).expect("token should validate");
 
-        assert_eq!(auth_user.user_id, user_id);
         assert_eq!(auth_user.username, "alice");
     }
 

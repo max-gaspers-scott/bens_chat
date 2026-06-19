@@ -130,17 +130,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let public_routes = Router::new()
         .route("/health", get(health))
         .route("/users", post(post_user))
-        .route("/auth/login", post(login_user))
-        .route("/debug-headers", get(debug_headers));
+        .route("/auth/login", post(login_user));
+    // .route("/debug-headers", get(debug_headers));
 
     let protected_routes = Router::new()
-        .route("/user-chats", get(get_user_chats).post(post_user_chat))
+        .route(
+            "/user-chats",
+            get(post_chat_participant).post(post_chat_participant), //is
+                                                                    // the get part nessisary
+        )
         .route(
             "/messages",
-            get(get_message_id_sender_id_content_sent_at_chat_id).post(post_message),
+            get(get_message_id_sender_name_content_parent).post(post_message),
         )
-        .route("/users", get(get_user_id_username))
-        .route("/chats", post(post_chat))
+        // .route("/users", get(get_user_id_username))
+        // .route("/chats", post(post_chat)) // no more chats, so just post mesages
+        //
         .route("/password-set", post(set_password))
         .route("/minio-fetch", get(get_fetch_url))
         .route("/minio-post", get(get_put_url))
@@ -189,11 +194,11 @@ struct CreateChatRequest {
     chat_name: Option<String>,
 }
 
-async fn is_user_in_chat(pool: &PgPool, user_id: Uuid, chat_id: Uuid) -> Result<bool, sqlx::Error> {
+async fn is_user_in_chat(pool: &PgPool, name: String, chat_id: Uuid) -> Result<bool, sqlx::Error> {
     sqlx::query_scalar::<_, bool>(
         "SELECT EXISTS(SELECT 1 FROM user_chats WHERE user_id = $1 AND chat_id = $2)",
     )
-    .bind(user_id)
+    .bind(name)
     .bind(chat_id)
     .fetch_one(pool)
     .await
@@ -216,9 +221,9 @@ async fn set_password(
         }
     };
 
-    let result = sqlx::query("UPDATE users SET password_hash = $1 WHERE user_id = $2")
+    let result = sqlx::query("UPDATE users SET password_hash = $1 WHERE user_name = $2")
         .bind(password_hash)
-        .bind(auth_user.user_id)
+        .bind(auth_user.username)
         .execute(&pool)
         .await;
 
@@ -237,76 +242,82 @@ pub struct MessageWithUser {
     pub sent_at: Option<chrono::DateTime<chrono::Utc>>,
     pub minio_url: Option<String>,
 }
-
-async fn get_message_id_sender_id_content_sent_at_chat_id(
+#[derive(Debug, Deserialize)]
+struct ParentQuery {
+    parent: uuid::Uuid,
+}
+async fn get_message_id_sender_name_content_parent(
     Extension(auth_user): Extension<AuthUser>,
-    match_val: Query<ChatIdQuery>,
+    match_val: Query<ParentQuery>,
     extract::State(pool): extract::State<PgPool>,
 ) -> Json<Value> {
-    match is_user_in_chat(&pool, auth_user.user_id, match_val.chat_id).await {
-        Ok(true) => {}
-        Ok(false) => return Json(json!({"status": "error", "error": "Forbidden"})),
-        Err(e) => return Json(json!({"status": "error", "error": e.to_string()})),
-    }
+    let query = "SELECT * FROM messages WHERE parent = $1";
+    let q = sqlx::query_as::<_, Message>(&query).bind(match_val.parent.clone());
 
-    let q = "SELECT messages.message_id, messages.sender_id, users.username, messages.content, messages.sent_at, messages.minio_url FROM messages LEFT JOIN users ON messages.sender_id = users.user_id WHERE chat_id = $1 ORDER BY sent_at";
-    let result = sqlx::query_as::<_, MessageWithUser>(q)
-        .bind(match_val.chat_id)
-        .fetch_all(&pool)
-        .await;
-
-    match result {
-        Ok(messages) => Json(json!({"status": "success", "payload": messages})),
-        Err(e) => Json(json!({"status": "error", "error": e.to_string()})),
+    match q.fetch_all(&pool).await {
+        Ok(messages) => {
+            let payloads: Vec<Value> = messages
+                .into_iter()
+                .map(|m| {
+                    json!({
+                        "message_id": m.message_id,
+                        "sender_name": m.sender_name,
+                        "content": m.content,
+                        "sent_at": m.sent_at,
+                    })
+                })
+                .collect();
+            Json(json!({
+                "status": "success",
+                "payload": payloads
+            }))
+        }
+        Err(e) => Json(json!({
+            "status": "error",
+            "error": format!("Database error: {}", e)
+        })),
     }
 }
 
 //TODO: @gemini is bad solution
 //should check if the chat is with a user named "gemini" and no other users and if so post gemini
 //respoce
-async fn post_message(
+pub async fn post_message(
     Extension(auth_user): Extension<AuthUser>,
     extract::State(pool): extract::State<PgPool>,
-    Json(payload): Json<CreateMessageRequest>,
+    Json(payload): Json<Message>,
 ) -> Json<Value> {
-    match is_user_in_chat(&pool, auth_user.user_id, payload.chat_id).await {
-        Ok(true) => {}
-        Ok(false) => return Json(json!({"res": "error: forbidden"})),
-        Err(e) => return Json(json!({"res": format!("error: {}", e)})),
-    }
+    // if first_word == "@gemini" {
+    //     println!("message starts with @gemini");
+    //     let gem_res = match gemini(&value.content).await {
+    //         Ok(res) => res,
+    //         Err(e) => format!("Error generating content: {}", e),
+    //     };
+    //     let _ = sqlx::query_as::<_, Message>(
+    //         "INSERT INTO messages (chat_id, sender_id, content, minio_url) VALUES ($1, $2, $3, $4) RETURNING *",
+    //     )
+    //     .bind(payload.chat_id)
+    //     .bind(auth_user.user_id) // why not gemini a
+    //         // hardcoded uuid of gemini??
+    //     .bind(gem_res)
+    //     .bind(payload.minio_url)
+    //     .fetch_one(&pool)
+    //     .await;
+    // }
+    // change hardcoded number of values
+    let query =
+        "INSERT INTO messages (sender_name, parent, content) VALUES ($1, $2, $3) RETURNING *";
 
-    let result = sqlx::query_as::<_, Message>(
-        "INSERT INTO messages (chat_id, sender_id, content, minio_url) VALUES ($1, $2, $3, $4) RETURNING *",
-    )
-    .bind(&payload.chat_id)
-    .bind(&auth_user.user_id)
-    .bind(&payload.content)
-    .bind(&payload.minio_url)
-    .fetch_one(&pool)
-    .await;
+    //// what is bound is wrong
+    let q = sqlx::query_as::<_, Message>(&query)
+        .bind(payload.sender_name)
+        .bind(payload.parent)
+        .bind(payload.content);
+
+    let result = q.fetch_one(&pool).await;
 
     match result {
-        Ok(value) => {
-            let first_word = value.content.split_whitespace().next().unwrap_or("");
-            if first_word == "@gemini" {
-                println!("message starts with @gemini");
-                let gem_res = match gemini(&value.content).await {
-                    Ok(res) => res,
-                    Err(e) => format!("Error generating content: {}", e),
-                };
-                let _ = sqlx::query_as::<_, Message>(
-                    "INSERT INTO messages (chat_id, sender_id, content, minio_url) VALUES ($1, $2, $3, $4) RETURNING *",
-                )
-                .bind(payload.chat_id)
-                .bind(auth_user.user_id) // why not gemini a
-                    // hardcoded uuid of gemini??
-                .bind(gem_res)
-                .bind(payload.minio_url)
-                .fetch_one(&pool)
-                .await;
-            }
-            Json(json!({"res": "success", "data": value}))
-        }
+        Ok(value) => Json(json!({"res": "success", "data": value})),
         Err(e) => Json(json!({"res": format!("error: {}", e)})),
     }
 }
@@ -409,36 +420,28 @@ async fn gemini(message: &str) -> Result<String, reqwest::Error> {
     Ok(text)
 }
 
-async fn post_user(
+pub async fn post_user(
     extract::State(pool): extract::State<PgPool>,
-    Json(payload): Json<CreateUserRequest>,
+    Json(payload): Json<User>,
 ) -> Json<Value> {
-    let password_hash = match hash(&payload.password, DEFAULT_COST) {
+    let password_hash = match hash(&payload.password_hash, 12) {
         Ok(password_hash) => password_hash,
         Err(e) => return Json(json!({"res": format!("error: {}", e)})),
     };
+    // change hardcoded number of values
+    let query = "INSERT INTO users (name, phone_number, email, passwrod_hash) VALUES ($1, $2, $3, $4) RETURNING name, phone_number, email, passwrod_hash AS password_hash";
 
-    let result = sqlx::query_as::<_, User>(
-        "INSERT INTO users (username, email, password_hash, phone_number) VALUES ($1, $2, $3, $4) RETURNING *",
-    )
-    .bind(payload.username)
-    .bind(payload.email)
-    .bind(password_hash)
-    .bind(payload.phone_number)
-    .fetch_one(&pool)
-    .await;
+    //// what is bound is wrong
+    let q = sqlx::query_as::<_, User>(&query)
+        .bind(payload.name)
+        .bind(payload.phone_number)
+        .bind(payload.email)
+        .bind(password_hash);
+
+    let result = q.fetch_one(&pool).await;
 
     match result {
-        Ok(value) => Json(json!({
-            "res": "success",
-            "data": {
-                "user_id": value.user_id,
-                "username": value.username,
-                "email": value.email,
-                "phone_number": value.phone_number,
-                "created_at": value.created_at,
-            }
-        })),
+        Ok(value) => Json(json!({"res": "success", "data": value})),
         Err(e) => Json(json!({"res": format!("error: {}", e)})),
     }
 }
@@ -447,18 +450,18 @@ async fn login_user(
     extract::State(pool): extract::State<PgPool>,
     Json(payload): Json<LoginRequest>,
 ) -> Json<Value> {
-    let result = sqlx::query_as::<_, User>("SELECT * FROM users WHERE username = $1")
-        .bind(payload.username)
+    let result = sqlx::query_as::<_, User>("SELECT name, phone_number, email, passwrod_hash AS password_hash FROM users WHERE name = $1")
+        .bind(&payload.username)
         .fetch_optional(&pool)
         .await;
 
     match result {
         Ok(Some(user)) if verify(&payload.password, &user.password_hash).unwrap_or(false) => {
-            match auth::create_token(user.user_id, &user.username) {
+            match auth::create_token(&user.name) {
                 Ok(token) => Json(json!({
                     "status": "success",
                     "payload": {
-                        "user_id": user.user_id,
+                        "username": user.name,
                         "token": token,
                     }
                 })),
@@ -488,32 +491,32 @@ async fn post_chat(
     }
 }
 
-async fn post_user_chat(
-    Extension(auth_user): Extension<AuthUser>,
-    extract::State(pool): extract::State<PgPool>,
-    Json(payload): Json<UserChat>,
-) -> Json<Value> {
-    if payload.user_id != auth_user.user_id {
-        match is_user_in_chat(&pool, auth_user.user_id, payload.chat_id).await {
-            Ok(true) => {}
-            Ok(false) => return Json(json!({"res": "error: forbidden"})),
-            Err(e) => return Json(json!({"res": format!("error: {}", e)})),
-        }
-    }
-
-    let result = sqlx::query_as::<_, UserChat>(
-        "INSERT INTO user_chats (user_id, chat_id) VALUES ($1, $2) RETURNING *",
-    )
-    .bind(payload.user_id)
-    .bind(payload.chat_id)
-    .fetch_one(&pool)
-    .await;
-
-    match result {
-        Ok(value) => Json(json!({"res": "success", "data": value})),
-        Err(e) => Json(json!({"res": format!("error: {}", e)})),
-    }
-}
+// async fn post_user_chat(
+//     Extension(auth_user): Extension<AuthUser>,
+//     extract::State(pool): extract::State<PgPool>,
+//     Json(payload): Json<UserChat>,
+// ) -> Json<Value> {
+//     if payload.user_id != auth_user.user_id {
+//         match is_user_in_chat(&pool, auth_user.user_id, payload.chat_id).await {
+//             Ok(true) => {}
+//             Ok(false) => return Json(json!({"res": "error: forbidden"})),
+//             Err(e) => return Json(json!({"res": format!("error: {}", e)})),
+//         }
+//     }
+//
+//     let result = sqlx::query_as::<_, UserChat>(
+//         "INSERT INTO user_chats (user_id, chat_id) VALUES ($1, $2) RETURNING *",
+//     )
+//     .bind(payload.user_id)
+//     .bind(payload.chat_id)
+//     .fetch_one(&pool)
+//     .await;
+//
+//     match result {
+//         Ok(value) => Json(json!({"res": "success", "data": value})),
+//         Err(e) => Json(json!({"res": format!("error: {}", e)})),
+//     }
+// }
 
 #[derive(Debug, Deserialize)]
 struct GetUserChatsQuery {
@@ -528,30 +531,24 @@ struct ChatWithJoinedAt {
     pub joined_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-async fn get_user_chats(
+pub async fn post_chat_participant(
     Extension(auth_user): Extension<AuthUser>,
-    extract::Query(params): extract::Query<GetUserChatsQuery>,
     extract::State(pool): extract::State<PgPool>,
+    Json(payload): Json<ChatParticipant>,
 ) -> Json<Value> {
-    if params.user_id != auth_user.user_id {
-        return Json(json!({"status": "error", "error": "Forbidden"}));
-    }
+    // change hardcoded number of values
+    let query = "INSERT INTO chat_participants (chat_id, user_name) VALUES ($1, $2) RETURNING *";
 
-    let query = r#"
-        SELECT c.chat_id, c.chat_name, c.created_at, uc.joined_at
-        FROM chats c
-        INNER JOIN user_chats uc ON c.chat_id = uc.chat_id
-        WHERE uc.user_id = $1
-    "#;
+    //// what is bound is wrong
+    let q = sqlx::query_as::<_, ChatParticipant>(&query)
+        .bind(payload.chat_id)
+        .bind(payload.user_name);
 
-    let result = sqlx::query_as::<_, ChatWithJoinedAt>(query)
-        .bind(auth_user.user_id)
-        .fetch_all(&pool)
-        .await;
+    let result = q.fetch_one(&pool).await;
 
     match result {
-        Ok(chats) => Json(json!({"status": "success", "data": chats})),
-        Err(e) => Json(json!({"status": "error", "error": e.to_string()})),
+        Ok(value) => Json(json!({"res": "success", "data": value})),
+        Err(e) => Json(json!({"res": format!("error: {}", e)})),
     }
 }
 
@@ -573,8 +570,7 @@ async fn get_user_id_username(
         Ok(Some(user)) => Json(json!({
             "status": "success",
             "payload": {
-                "user_id": user.user_id,
-                "username": user.username,
+                "username": user.name,
             }
         })),
         Ok(None) => Json(json!({"status": "error", "error": "User not found"})),
@@ -613,7 +609,7 @@ async fn get_put_url(
     extract::State(pool): extract::State<PgPool>,
     Query(params): Query<UploadUrlQuery>,
 ) -> Json<Value> {
-    match is_user_in_chat(&pool, auth_user.user_id, params.chat_id).await {
+    match is_user_in_chat(&pool, auth_user.username, params.chat_id).await {
         Ok(true) => {}
         Ok(false) => return Json(json!({"status": "error", "error": "Forbidden"})),
         Err(e) => return Json(json!({"status": "error", "error": e.to_string()})),
@@ -651,7 +647,7 @@ async fn get_fetch_url(
         Some(id) => id,
         None => return Json(json!({"status": "error", "error": "Invalid object key"})),
     };
-    match is_user_in_chat(&pool, auth_user.user_id, chat_id).await {
+    match is_user_in_chat(&pool, auth_user.username, chat_id).await {
         Ok(true) => {}
         Ok(false) => return Json(json!({"status": "error", "error": "Forbidden"})),
         Err(e) => return Json(json!({"status": "error", "error": e.to_string()})),

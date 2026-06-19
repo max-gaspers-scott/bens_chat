@@ -34,6 +34,41 @@ use tower_http::{
 };
 use uuid::Uuid;
 
+#[derive(Debug, Deserialize)]
+struct FetchUrlQuery {
+    object_key: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct LoginRequest {
+    username: String,
+    password: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct CreateChatRequest {
+    chat_name: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct NewPass {
+    new_password: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct UsernameQuery {
+    username: String,
+}
+#[derive(Debug, Deserialize)]
+struct ParentQuery {
+    parent: uuid::Uuid,
+}
+
+#[derive(Debug, Deserialize)]
+struct UploadUrlQuery {
+    chat_id: Uuid,
+    file_extension: String,
+}
 async fn health() -> String {
     "healthy".to_string()
 }
@@ -162,38 +197,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     axum::serve(listener, app).await.unwrap();
     Ok(())
 }
-
-#[derive(Debug, Deserialize)]
-struct ChatIdQuery {
-    chat_id: Uuid,
-}
-
-#[derive(Debug, Deserialize)]
-struct CreateMessageRequest {
-    chat_id: Uuid,
-    content: String,
-    minio_url: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-struct CreateUserRequest {
-    username: String,
-    email: String,
-    password: String,
-    phone_number: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-struct LoginRequest {
-    username: String,
-    password: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct CreateChatRequest {
-    chat_name: Option<String>,
-}
-
 async fn is_user_in_chat(pool: &PgPool, name: String, chat_id: Uuid) -> Result<bool, sqlx::Error> {
     sqlx::query_scalar::<_, bool>(
         "SELECT EXISTS(SELECT 1 FROM user_chats WHERE user_id = $1 AND chat_id = $2)",
@@ -203,12 +206,6 @@ async fn is_user_in_chat(pool: &PgPool, name: String, chat_id: Uuid) -> Result<b
     .fetch_one(pool)
     .await
 }
-
-#[derive(Debug, Deserialize)]
-struct NewPass {
-    new_password: String,
-}
-
 async fn set_password(
     extract::State(pool): extract::State<PgPool>,
     Extension(auth_user): Extension<AuthUser>,
@@ -231,20 +228,6 @@ async fn set_password(
         Ok(_) => Json(json!({"status": "success"})),
         Err(e) => Json(json!({"status": "error", "error": e.to_string()})),
     }
-}
-
-#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]
-pub struct MessageWithUser {
-    pub message_id: uuid::Uuid,
-    pub sender_id: uuid::Uuid,
-    pub username: String,
-    pub content: String,
-    pub sent_at: Option<chrono::DateTime<chrono::Utc>>,
-    pub minio_url: Option<String>,
-}
-#[derive(Debug, Deserialize)]
-struct ParentQuery {
-    parent: uuid::Uuid,
 }
 async fn get_message_id_sender_name_content_parent(
     Extension(auth_user): Extension<AuthUser>,
@@ -310,7 +293,7 @@ pub async fn post_message(
 
     //// what is bound is wrong
     let q = sqlx::query_as::<_, Message>(&query)
-        .bind(payload.sender_name)
+        .bind(auth_user.username)
         .bind(payload.parent)
         .bind(payload.content);
 
@@ -517,20 +500,6 @@ async fn post_chat(
 //         Err(e) => Json(json!({"res": format!("error: {}", e)})),
 //     }
 // }
-
-#[derive(Debug, Deserialize)]
-struct GetUserChatsQuery {
-    user_id: Uuid,
-}
-
-#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]
-struct ChatWithJoinedAt {
-    pub chat_id: Uuid,
-    pub chat_name: Option<String>,
-    pub created_at: Option<chrono::DateTime<chrono::Utc>>,
-    pub joined_at: Option<chrono::DateTime<chrono::Utc>>,
-}
-
 pub async fn post_chat_participant(
     Extension(auth_user): Extension<AuthUser>,
     extract::State(pool): extract::State<PgPool>,
@@ -552,11 +521,6 @@ pub async fn post_chat_participant(
     }
 }
 
-#[derive(Debug, Deserialize)]
-struct UsernameQuery {
-    username: String,
-}
-
 async fn get_user_id_username(
     match_val: Query<UsernameQuery>,
     extract::State(pool): extract::State<PgPool>,
@@ -576,17 +540,6 @@ async fn get_user_id_username(
         Ok(None) => Json(json!({"status": "error", "error": "User not found"})),
         Err(e) => Json(json!({"status": "error", "error": e.to_string()})),
     }
-}
-
-#[derive(Debug, Deserialize)]
-struct UploadUrlQuery {
-    chat_id: Uuid,
-    file_extension: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct FetchUrlQuery {
-    object_key: String,
 }
 
 fn build_minio_client(endpoint: &str) -> Minio {

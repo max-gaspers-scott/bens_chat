@@ -51,10 +51,6 @@ pub fn validate_token(token: &str) -> Result<AuthUser, jsonwebtoken::errors::Err
         &Validation::default(),
     )?;
 
-    let user_id = Uuid::parse_str(&token_data.claims.sub).map_err(|_| {
-        jsonwebtoken::errors::Error::from(jsonwebtoken::errors::ErrorKind::InvalidToken)
-    })?;
-
     Ok(AuthUser {
         username: token_data.claims.sub,
     })

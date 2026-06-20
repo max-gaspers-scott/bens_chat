@@ -13,7 +13,7 @@ use uuid::Uuid;
 
 // should be in env, but this will work for now
 // const PORT: u32 = 8081;
-const BASE_URL: &str = "http://localhost:9821";
+const BASE_URL: &str = "http://localhost:8081";
 
 #[derive(Debug)]
 enum Stats {
@@ -39,7 +39,7 @@ struct LoginResponse {
 #[derive(Deserialize, Debug)]
 struct LoginPayload {
     token: String,
-    user_id: String,
+    username: String,
 }
 enum LoginInfo {
     Logedin { info: LoginPayload },
@@ -89,7 +89,7 @@ impl Window {
         };
 
         let uid = match &self.login {
-            LoginInfo::Logedin { info } => &info.user_id,
+            LoginInfo::Logedin { info } => &info.username,
             LoginInfo::NotLogedin => &String::from("no user id"),
         };
         println!("{uid}");
@@ -255,7 +255,7 @@ async fn get_messages(
     chat_id: &Uuid,
 ) -> Result<Vec<Message>, reqwest::Error> {
     println!("chat-id id: {:?}", chat_id);
-    let url = format!("{BASE_URL}/messages?chat_id={}", chat_id);
+    let url = format!("{BASE_URL}/messages?parent={}", chat_id);
 
     let client = Client::new();
 
@@ -301,13 +301,14 @@ struct Chat {
 
 //TODO: need user id as query param
 async fn get_chats(user_info: &LoginPayload) -> Result<ChatResponce, reqwest::Error> {
-    println!("{}", user_info.user_id);
+    println!("{}", user_info.username);
     println!("{}", user_info.token);
-    let url = format!("{BASE_URL}/user-chats?user_id={}", user_info.user_id);
+    let url = format!("{BASE_URL}/user-chats?user_id={}", user_info.username);
 
     let client = reqwest::Client::new();
     let res = client.get(url).bearer_auth(&user_info.token).send().await?;
     let chats: ChatResponce = res.json().await?;
+    //TODO: the new nestaed messages structur the will break everyting.
     Ok(chats)
 }
 

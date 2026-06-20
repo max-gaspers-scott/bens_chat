@@ -65,14 +65,9 @@ CREATE TABLE IF NOT EXISTS messages (
     content     JSONB NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS chats (
-    chat_id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    root_message_id UUID UNIQUE NOT NULL REFERENCES messages(message_id)
-);
-
 CREATE TABLE IF NOT EXISTS chat_participants (
     chat_participant_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    chat_id             UUID NOT NULL REFERENCES chats(chat_id),
+    chat_id             UUID NOT NULL REFERENCES messages(message_id),
     user_name           VARCHAR(255) NOT NULL REFERENCES users(name),
     UNIQUE (chat_id, user_name)
 );
@@ -136,19 +131,6 @@ SELECT
     )
 FROM _old_chats oc
 JOIN _chat_to_root_msg m ON m.old_chat_id = oc.chat_id;
-
--- ---------------------------------------------------------------------------
--- STEP 5: Populate new chats table
---   Each old chat → one new chats row pointing to its root message
--- ---------------------------------------------------------------------------
-
-INSERT INTO chats (chat_id, root_message_id)
-SELECT
-    oc.chat_id,          -- reuse the same UUID for continuity
-    m.new_message_id
-FROM _old_chats oc
-JOIN _chat_to_root_msg m ON m.old_chat_id = oc.chat_id;
-
 -- ---------------------------------------------------------------------------
 -- STEP 6: Migrate old messages
 --

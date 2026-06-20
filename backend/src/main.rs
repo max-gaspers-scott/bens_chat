@@ -73,20 +73,6 @@ async fn health() -> String {
     "healthy".to_string()
 }
 
-async fn debug_headers(request: Request) -> Json<Value> {
-    let mut headers_json = serde_json::Map::new();
-    for (name, value) in request.headers() {
-        if let Ok(val) = value.to_str() {
-            headers_json.insert(name.to_string().to_lowercase(), json!(val));
-        }
-    }
-    Json(json!({
-        "headers": headers_json,
-        "uri": request.uri().to_string(),
-        "method": request.method().to_string(),
-    }))
-}
-
 fn build_cors_layer() -> CorsLayer {
     let configured_origins = env::var("CORS_ALLOWED_ORIGINS").ok();
 
@@ -171,8 +157,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let protected_routes = Router::new()
         .route(
             "/user-chats",
-            get(post_chat_participant).post(post_chat_participant), //is
-                                                                    // the get part nessisary
+            get(post_chat_participant).post(post_chat_participant), // need
+                                                                    // a real get part so users can see there "chats"
         )
         .route(
             "/messages",
@@ -194,12 +180,40 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_state(pool);
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:8081").await.unwrap();
+
     axum::serve(listener, app).await.unwrap();
     Ok(())
 }
-async fn is_user_in_chat(pool: &PgPool, name: String, chat_id: Uuid) -> Result<bool, sqlx::Error> {
+async fn is_user_in_chat(pool: &PgPool, name: &str, chat_id: &Uuid) -> Result<bool, sqlx::Error> {
     sqlx::query_scalar::<_, bool>(
-        "SELECT EXISTS(SELECT 1 FROM user_chats WHERE user_id = $1 AND chat_id = $2)",
+        r#"
+        WITH RECURSIVE chat_tree AS (
+            SELECT
+                m.message_id,
+                m.parent,
+                m.message_id as original_message_id
+            FROM messages m
+            WHERE m.message_id = $2 -- Start with the given message_id
+
+            UNION ALL
+
+            SELECT
+                m_rec.message_id,
+                m_rec.parent,
+                ct.original_message_id
+            FROM messages m_rec
+            JOIN chat_tree ct ON m_rec.message_id = ct.parent
+        )
+        SELECT EXISTS (
+            SELECT 1
+            FROM chat_participants cp
+            JOIN chats c ON cp.chat_id = c.chat_id
+            JOIN chat_tree ct_root ON c.root_message_id = ct_root.message_id
+            WHERE ct_root.parent IS NULL -- This ensures we are at the root of the tree
+              AND ct_root.original_message_id = $2 -- This ensures the given message_id is part of this tree
+              AND cp.user_name = $1
+        )
+        "#,
     )
     .bind(name)
     .bind(chat_id)
@@ -234,6 +248,12 @@ async fn get_message_id_sender_name_content_parent(
     match_val: Query<ParentQuery>,
     extract::State(pool): extract::State<PgPool>,
 ) -> Json<Value> {
+    match is_user_in_chat(&pool, &auth_user.username, &match_val.parent).await {
+        Ok(true) => {}
+        Ok(false) => return Json(json!({"status": "error", "error": "Forbidden"})),
+        Err(e) => return Json(json!({"status": "error", "error": e.to_string()})),
+    }
+
     let query = "SELECT * FROM messages WHERE parent = $1";
     let q = sqlx::query_as::<_, Message>(&query).bind(match_val.parent.clone());
 
@@ -265,6 +285,10 @@ async fn get_message_id_sender_name_content_parent(
 //TODO: @gemini is bad solution
 //should check if the chat is with a user named "gemini" and no other users and if so post gemini
 //respoce
+
+//TODO: the funtion (and endpoint) has to much responsiblity
+//should have a sepret endpiont+handeler for posting root messages, maybe called create chat
+//
 pub async fn post_message(
     Extension(auth_user): Extension<AuthUser>,
     extract::State(pool): extract::State<PgPool>,
@@ -290,18 +314,82 @@ pub async fn post_message(
     // change hardcoded number of values
     let query =
         "INSERT INTO messages (sender_name, parent, content) VALUES ($1, $2, $3) RETURNING *";
+    if let Some(parent) = payload.parent {
+        match is_user_in_chat(&pool, &auth_user.username, &parent).await {
+            Ok(true) => {}
+            Ok(false) => return Json(json!({"status": "error", "error": "Forbidden"})),
+            Err(e) => return Json(json!({"status": "error", "error": e.to_string()})),
+        }
 
-    //// what is bound is wrong
-    let q = sqlx::query_as::<_, Message>(&query)
-        .bind(auth_user.username)
-        .bind(payload.parent)
-        .bind(payload.content);
+        let query =
+            "INSERT INTO messages (sender_name, parent, content) VALUES ($1, $2, $3) RETURNING *";
 
-    let result = q.fetch_one(&pool).await;
+        let q = sqlx::query_as::<_, Message>(&query)
+            .bind(auth_user.username)
+            .bind(payload.parent)
+            .bind(payload.content);
 
-    match result {
-        Ok(value) => Json(json!({"res": "success", "data": value})),
-        Err(e) => Json(json!({"res": format!("error: {}", e)})),
+        let result = q.fetch_one(&pool).await;
+
+        match result {
+            Ok(value) => Json(json!({"res": "success", "data": value})),
+            Err(e) => Json(json!({"res": format!("error: {}", e)})),
+        }
+    } else {
+        let mut tx = match pool.begin().await {
+            Ok(tx) => tx,
+            Err(e) => return Json(json!({"res": format!("error: {}", e)})),
+        };
+
+        let message_query =
+            "INSERT INTO messages (sender_name, parent, content) VALUES ($1, NULL, $2) RETURNING *";
+        let message_result = sqlx::query_as::<_, Message>(&message_query)
+            .bind(&auth_user.username)
+            .bind(&payload.content)
+            .fetch_one(&mut *tx)
+            .await;
+
+        let message = match message_result {
+            Ok(m) => m,
+            Err(e) => {
+                let _ = tx.rollback().await;
+                return Json(json!({"res": format!("error: {}", e)}));
+            }
+        };
+
+        //TODO: get rid of the consepts of chats from the DB entierly. a 1 to 1 onto mapping of
+        //messge id to another uuid is not helpfull
+        let chat_query = "INSERT INTO chats (root_message_id) VALUES ($1) RETURNING chat_id";
+        let chat_id_result = sqlx::query_scalar::<_, Uuid>(&chat_query)
+            .bind(message.message_id)
+            .fetch_one(&mut *tx)
+            .await;
+
+        let chat_id = match chat_id_result {
+            Ok(id) => id,
+            Err(e) => {
+                let _ = tx.rollback().await;
+                return Json(json!({"res": format!("error: {}", e)}));
+            }
+        };
+
+        let participant_query =
+            "INSERT INTO chat_participants (chat_id, user_name) VALUES ($1, $2)";
+        if let Err(e) = sqlx::query(&participant_query)
+            .bind(chat_id)
+            .bind(&auth_user.username)
+            .execute(&mut *tx)
+            .await
+        {
+            let _ = tx.rollback().await;
+            return Json(json!({"res": format!("error: {}", e)}));
+        }
+
+        if let Err(e) = tx.commit().await {
+            return Json(json!({"res": format!("error: {}", e)}));
+        }
+
+        Json(json!({"res": "success", "data": message}))
     }
 }
 #[derive(Deserialize, Debug, Serialize)]
@@ -562,7 +650,7 @@ async fn get_put_url(
     extract::State(pool): extract::State<PgPool>,
     Query(params): Query<UploadUrlQuery>,
 ) -> Json<Value> {
-    match is_user_in_chat(&pool, auth_user.username, params.chat_id).await {
+    match is_user_in_chat(&pool, &auth_user.username, &params.chat_id).await {
         Ok(true) => {}
         Ok(false) => return Json(json!({"status": "error", "error": "Forbidden"})),
         Err(e) => return Json(json!({"status": "error", "error": e.to_string()})),
@@ -600,7 +688,7 @@ async fn get_fetch_url(
         Some(id) => id,
         None => return Json(json!({"status": "error", "error": "Invalid object key"})),
     };
-    match is_user_in_chat(&pool, auth_user.username, chat_id).await {
+    match is_user_in_chat(&pool, &auth_user.username, &chat_id).await {
         Ok(true) => {}
         Ok(false) => return Json(json!({"status": "error", "error": "Forbidden"})),
         Err(e) => return Json(json!({"status": "error", "error": e.to_string()})),

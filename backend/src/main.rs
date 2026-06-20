@@ -157,8 +157,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let protected_routes = Router::new()
         .route(
             "/user-chats",
-            get(post_chat_participant).post(post_chat_participant), // need
-                                                                    // a real get part so users can see there "chats"
+            get(get_users_chats).post(post_chat_participant), // need
+                                                              // a real get part so users can see there "chats"
         )
         .route(
             "/messages",
@@ -184,6 +184,40 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     axum::serve(listener, app).await.unwrap();
     Ok(())
 }
+
+async fn get_users_chats(
+    extract::State(pool): extract::State<PgPool>,
+    Extension(auth_user): Extension<AuthUser>,
+    Query(username): Query<UsernameQuery>,
+) -> Json<Value> {
+    let query = "SELECT * FROM messages WHERE username = $1 LEFT JOIN chat_participants ON messages.message_id = chat_participants.message_id";
+    let q = sqlx::query_as::<_, Message>(&query).bind(username.username.clone());
+
+    match q.fetch_all(&pool).await {
+        Ok(messages) => {
+            let payloads: Vec<Value> = messages
+                .into_iter()
+                .map(|m| {
+                    json!({
+                        "message_id": m.message_id,
+                        "sender_name": m.sender_name,
+                        "content": m.content,
+                        "sent_at": m.sent_at,
+                    })
+                })
+                .collect();
+            Json(json!({
+                "status": "success",
+                "payload": payloads
+            }))
+        }
+        Err(e) => Json(json!({
+            "status": "error",
+            "error": format!("Database error: {}", e)
+        })),
+    }
+}
+
 async fn is_user_in_chat(pool: &PgPool, name: &str, chat_id: &Uuid) -> Result<bool, sqlx::Error> {
     sqlx::query_scalar::<_, bool>(
         r#"

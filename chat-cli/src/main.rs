@@ -1,3 +1,4 @@
+use chrono;
 use clap::error::ContextKind;
 use core::slice;
 use reqwest::{self, Client};
@@ -107,8 +108,14 @@ impl Window {
         let mut hashmap = HashMap::new();
 
         for c in chats {
-            println!("chat: {}", c.chat_name);
-            hashmap.insert(c.chat_name, c.chat_id);
+            println!("chat: {}", c.content);
+
+            let chat_name = c.content["name"]
+                .as_str()
+                .ok_or_else(|| format!("faild to get root messge name: {}", c.message_id))
+                .unwrap();
+
+            hashmap.insert(chat_name.to_string(), c.message_id);
         }
 
         let mut buff = String::new();
@@ -202,20 +209,18 @@ struct TextMessage {
 
 #[derive(Debug, serde::Deserialize)]
 struct Message {
+    #[serde(default)]
     message_id: uuid::Uuid,
-    sender_id: uuid::Uuid,
-    content: String,
-    sent_at: String,
-    minio_url: Option<String>,
-    username: String,
+    sender_name: String,
+    parent: Option<uuid::Uuid>,
+    content: serde_json::Value,
+    #[serde(default)]
+    sent_at: chrono::DateTime<chrono::Utc>,
 }
 
 impl Message {
     fn show(&self) {
-        println!("{}: {}", self.username, self.content);
-        if self.minio_url.is_some() {
-            println!("####### some midea #######");
-        };
+        println!("{}: {}", self.sender_name, self.content);
     }
 }
 
@@ -287,16 +292,8 @@ async fn get_messages(
 
 #[derive(Deserialize)]
 struct ChatResponce {
-    data: Vec<Chat>,
+    data: Vec<Message>,
     status: String,
-}
-
-#[derive(Deserialize)]
-struct Chat {
-    chat_id: Uuid,
-    chat_name: String,
-    created_at: String,
-    joined_at: String,
 }
 
 //TODO: need user id as query param
@@ -308,17 +305,7 @@ async fn get_chats(user_info: &LoginPayload) -> Result<ChatResponce, reqwest::Er
     let client = reqwest::Client::new();
     let res = client.get(url).bearer_auth(&user_info.token).send().await?;
     let chats: ChatResponce = res.json().await?;
-    //TODO: the new nestaed messages structur the will break everyting.
     Ok(chats)
-}
-
-// need to add this json as headers
-// {'Content-Type': 'application/json',  Authorization: `Bearer ${token}`}
-//
-#[derive(Eq, Hash, PartialEq)]
-enum State {
-    Chats,
-    Messages,
 }
 
 async fn send_message(

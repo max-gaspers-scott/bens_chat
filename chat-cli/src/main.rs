@@ -104,7 +104,14 @@ impl Window {
                                                //because we have to go thought login to get here
         };
         let chats_raw = get_chats(login);
-        let chats = chats_raw.await.unwrap().data;
+        let chats = match chats_raw.await {
+            Ok(chats) => chats,
+            Err(e) => {
+                println!("error with the api {:?}", e);
+                panic!();
+            }
+        }
+        .payload;
         let mut hashmap = HashMap::new();
 
         for c in chats {
@@ -292,7 +299,7 @@ async fn get_messages(
 
 #[derive(Deserialize)]
 struct ChatResponce {
-    data: Vec<Message>,
+    payload: Vec<Message>,
     status: String,
 }
 
@@ -300,11 +307,13 @@ struct ChatResponce {
 async fn get_chats(user_info: &LoginPayload) -> Result<ChatResponce, reqwest::Error> {
     println!("{}", user_info.username);
     println!("{}", user_info.token);
-    let url = format!("{BASE_URL}/user-chats?user_id={}", user_info.username);
+    let url = format!("{BASE_URL}/user-chats?username={}", user_info.username);
 
     let client = reqwest::Client::new();
     let res = client.get(url).bearer_auth(&user_info.token).send().await?;
     let chats: ChatResponce = res.json().await?;
+    println!("{:?}", chats.status);
+
     Ok(chats)
 }
 

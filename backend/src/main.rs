@@ -190,7 +190,10 @@ async fn get_users_chats(
     Extension(auth_user): Extension<AuthUser>,
     Query(username): Query<UsernameQuery>,
 ) -> Json<Value> {
-    let query = "SELECT * FROM messages WHERE username = $1 LEFT JOIN chat_participants ON messages.message_id = chat_participants.message_id";
+    let query = "SELECT m.message_id, m.sender_name, m.parent, m.content, m.sent_at \
+                 FROM messages m \
+                 JOIN chat_participants cp ON cp.chat_id = m.message_id \
+                 WHERE cp.user_name = $1 AND m.parent IS NULL";
     let q = sqlx::query_as::<_, Message>(&query).bind(username.username.clone());
 
     match q.fetch_all(&pool).await {

@@ -3,6 +3,7 @@ use clap::error::ContextKind;
 use core::slice;
 use reqwest::{self, Client};
 use serde::Deserialize;
+use std::collections::HashMap;
 use std::fmt::format;
 use std::fs::OpenOptions;
 use std::io::Write;
@@ -108,8 +109,13 @@ impl Window {
         let content = serde_json::json!({
             "title": title,
         });
+        let msg = SendMesage {
+            sender_name: login_stuff.username.clone(),
+            parent: None,
+            content: content,
+        };
 
-        match send_message(login_stuff, title, None).await {
+        match send_message(login_stuff, &msg).await {
             Ok(_) => {}
             Err(e) => println!("error sendimg message: {e}"),
         }
@@ -153,10 +159,7 @@ impl Window {
         for c in chats {
             println!("chat: {}", c.content["title"]);
 
-            let chat_name = c.content["title"]
-                .as_str()
-                .ok_or_else(|| format!("faild to get root messge name: {}", c.message_id))
-                .unwrap();
+            let chat_name = c.content["title"].as_str().unwrap_or("title was not found");
 
             hashmap.insert(chat_name.to_string(), c.message_id);
         }
@@ -192,7 +195,15 @@ impl Window {
             println!("your message: ");
             let mut message = String::new();
             std::io::stdin().read_line(&mut message);
-            match send_message(login_stuff, &message, Some(&chat_id)).await {
+            let content = serde_json::json!({
+                "text": message.trim(),
+            });
+            let msg = SendMesage {
+                sender_name: login_stuff.username.clone(),
+                parent: Some(chat_id),
+                content,
+            };
+            match send_message(login_stuff, &msg).await {
                 Ok(_) => {}
                 Err(e) => print!("error sendimg message: {e}"),
             }
@@ -266,9 +277,16 @@ struct Message {
     sent_at: chrono::DateTime<chrono::Utc>,
 }
 
+#[derive(Debug, serde::Serialize)]
+struct SendMesage {
+    sender_name: String,
+    parent: Option<uuid::Uuid>,
+    content: serde_json::Value,
+}
+
 impl Message {
     fn show(&self) {
-        println!("{}: {}", self.sender_name, self.content);
+        println!("{}: {}", self.sender_name, self.content["text"]);
     }
 }
 
@@ -358,37 +376,15 @@ async fn get_chats(user_info: &LoginPayload) -> Result<ChatResponce, reqwest::Er
     Ok(chats)
 }
 
-async fn send_message(
-    login: &LoginPayload,
-    title: &str,
-    parent_id: Option<&Uuid>,
-) -> Result<(), reqwest::Error> {
-    // let parent_id = message.parent;
+async fn send_message(login: &LoginPayload, message: &SendMesage) -> Result<(), reqwest::Error> {
+    let parent_id = message.parent;
     println!("running send message");
     let url = format!("{BASE_URL}/messages");
     let client = reqwest::Client::new();
-    // pub struct Message {
-    //     #[serde(default)]
-    //     pub message_id: uuid::Uuid,
-    //     pub sender_name: String,
-    //     pub parent: Option<uuid::Uuid>,
-    //     pub content: serde_json::Value,
-    //     #[serde(default)]
-    //     pub sent_at: chrono::DateTime<chrono::Utc>,
-    // }
-
-    let content = serde_json::json!({
-        "title": title,
-    });
-    let payload = serde_json::json!({
-        "sender_name": login.username,
-        "chat_id": parent_id,
-        "content": content,
-    });
 
     match client
         .post(url)
-        .json(&payload)
+        .json(message)
         .bearer_auth(login.token.clone())
         .send()
         .await
@@ -401,38 +397,6 @@ async fn send_message(
 }
 
 async fn show_messages(login: &LoginPayload, selected_id: &Uuid) -> Result<(), reqwest::Error> {
-    // TODO: be less stupid about how to tell wehn the user is making a new chat
-    // maybe time to go back to fsa for movign between create_chat, chat, and pick_chat states
-    // if selected_id
-    //     == &Uuid::parse_str("00000000-0000-0000-0000-000000000000").expect("Error getting 0 uuid")
-    // {
-    //     let mut name_buff = String::new();
-    //     println!("what would you like the new chat to be called");
-    //     std::io::stdin()
-    //         .read_line(&mut name_buff)
-    //         .expect("could not read input buffer");
-    //     let mut recipiant_buffer = String::new();
-    //     println!("who do you want to add to the chat");
-    //     std::io::stdin()
-    //         .read_line(&mut recipiant_buffer)
-    //         .expect("could not read input buffer");
-    //
-    //     // url parame nesisary ???
-    //     let url = format!("BASE_URL/chat?chat_name={}", name_buff);
-    //     let client = reqwest::Client::new();
-    //
-    //     let payload = serde_json::json!({
-    //         "chat_name": name_buff,
-    //     });
-    //
-    //     let send_res = client
-    //         .post(url)
-    //         .json(&payload)
-    //         .bearer_auth(login.token.clone())
-    //         .send()
-    //         .await?;
-    // }
-
     let messages = get_messages(&login, selected_id).await.unwrap();
     print!("{}[2J{}[1;1H", 27 as char, 27 as char);
     for m in messages {

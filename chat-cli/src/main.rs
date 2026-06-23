@@ -3,9 +3,6 @@ use clap::error::ContextKind;
 use core::slice;
 use reqwest::{self, Client};
 use serde::Deserialize;
-use serde_json;
-use std::alloc::handle_alloc_error;
-use std::collections::HashMap;
 use std::fmt::format;
 use std::fs::OpenOptions;
 use std::io::Write;
@@ -19,7 +16,8 @@ const BASE_URL: &str = "http://localhost:8081";
 #[derive(Debug)]
 enum Stats {
     Login,
-    Chats,                          // viewing  creating and deleating chats
+    Chats, // viewing  creating and deleating chats
+    NewChat,
     Conversation { chat_id: Uuid }, // viewing and sending messages
 }
 
@@ -28,6 +26,7 @@ enum Acction {
     Logout,
     Login,
     GotoChats,
+    MakeChat,
     GotoConversation { chat_id: Uuid },
 }
 
@@ -42,6 +41,8 @@ struct LoginPayload {
     token: String,
     username: String,
 }
+
+#[derive(Debug, serde::Deserialize)]
 enum LoginInfo {
     Logedin { info: LoginPayload },
     NotLogedin,
@@ -64,7 +65,9 @@ impl Window {
             (Stats::Chats, Acction::GotoConversation { chat_id }) => {
                 self.state = Stats::Conversation { chat_id: chat_id }
             }
+            (Stats::Chats, Acction::MakeChat) => self.state = Stats::NewChat,
             (Stats::Conversation { chat_id }, Acction::GotoChats) => self.state = Stats::Chats,
+            (Stats::NewChat, Acction::MakeChat) => self.state = Stats::Chats,
             (_, Acction::Logout) => self.state = Stats::Login,
             _ => self.state = Stats::Login,
         };
@@ -75,6 +78,7 @@ impl Window {
             let action = match &self.state {
                 Stats::Login => self.handel_login().await,
                 Stats::Chats => self.handel_chats().await,
+                Stats::NewChat => self.handel_make_chat().await,
                 Stats::Conversation { chat_id } => self.handel_conversation(*chat_id).await,
             };
 
@@ -83,6 +87,38 @@ impl Window {
             // Transition the state based on what happened in the screen
             self.transition(action);
         }
+    }
+    async fn handel_make_chat(&mut self) -> Acction {
+        let login_stuff = match &self.login {
+            LoginInfo::Logedin { info } => Some(info),
+            LoginInfo::NotLogedin => {
+                println!("not loged in");
+                None
+            }
+        }
+        .unwrap();
+        println!("make a chat");
+        println!("your root message title: ");
+        let mut title = String::new();
+        match std::io::stdin().read_line(&mut title) {
+            Ok(_) => {}
+            Err(e) => println!("an error reading from buffer: {e}"),
+        }
+        let title = title.trim();
+        let content = serde_json::json!({
+            "title": title,
+        });
+
+        match send_message(login_stuff, title, None).await {
+            Ok(_) => {}
+            Err(e) => println!("error sendimg message: {e}"),
+        }
+
+        if title == "/exit" {
+            print!("{}[2J{}[1;1H", 27 as char, 27 as char);
+            return Acction::GotoChats;
+        }
+        Acction::MakeChat
     }
     async fn handel_login(&mut self) -> Acction {
         self.login = LoginInfo::Logedin {
@@ -115,9 +151,9 @@ impl Window {
         let mut hashmap = HashMap::new();
 
         for c in chats {
-            println!("chat: {}", c.content);
+            println!("chat: {}", c.content["title"]);
 
-            let chat_name = c.content["name"]
+            let chat_name = c.content["title"]
                 .as_str()
                 .ok_or_else(|| format!("faild to get root messge name: {}", c.message_id))
                 .unwrap();
@@ -130,6 +166,11 @@ impl Window {
 
         std::io::stdin().read_line(&mut buff).unwrap();
         let input = buff.trim();
+        if input == "n" {
+            return Acction::MakeChat;
+        }
+
+        println!("your input: {input}");
         let selected_id = hashmap.get(input).unwrap();
 
         Acction::GotoConversation {
@@ -151,7 +192,7 @@ impl Window {
             println!("your message: ");
             let mut message = String::new();
             std::io::stdin().read_line(&mut message);
-            match send_message(login_stuff, &message, &chat_id).await {
+            match send_message(login_stuff, &message, Some(&chat_id)).await {
                 Ok(_) => {}
                 Err(e) => print!("error sendimg message: {e}"),
             }
@@ -312,31 +353,50 @@ async fn get_chats(user_info: &LoginPayload) -> Result<ChatResponce, reqwest::Er
     let client = reqwest::Client::new();
     let res = client.get(url).bearer_auth(&user_info.token).send().await?;
     let chats: ChatResponce = res.json().await?;
-    println!("{:?}", chats.status);
+    println!("get chats status: {:?}", chats.status);
 
     Ok(chats)
 }
 
 async fn send_message(
     login: &LoginPayload,
-    message: &str,
-    chat_id: &Uuid,
+    title: &str,
+    parent_id: Option<&Uuid>,
 ) -> Result<(), reqwest::Error> {
+    // let parent_id = message.parent;
     println!("running send message");
-    let url = format!("{BASE_URL}/messages?chat_id={}", chat_id);
+    let url = format!("{BASE_URL}/messages");
     let client = reqwest::Client::new();
+    // pub struct Message {
+    //     #[serde(default)]
+    //     pub message_id: uuid::Uuid,
+    //     pub sender_name: String,
+    //     pub parent: Option<uuid::Uuid>,
+    //     pub content: serde_json::Value,
+    //     #[serde(default)]
+    //     pub sent_at: chrono::DateTime<chrono::Utc>,
+    // }
 
+    let content = serde_json::json!({
+        "title": title,
+    });
     let payload = serde_json::json!({
-        "chat_id": chat_id,
-        "content": message,
+        "sender_name": login.username,
+        "chat_id": parent_id,
+        "content": content,
     });
 
-    let send_res = client
+    match client
         .post(url)
         .json(&payload)
         .bearer_auth(login.token.clone())
         .send()
-        .await?;
+        .await
+    {
+        Ok(_) => {}
+        Err(e) => println!("error posting message: {e}"),
+    }
+
     Ok(())
 }
 
@@ -469,22 +529,25 @@ async fn user_login() -> Result<LoginPayload, reqwest::Error> {
     let name = name.trim();
 
     let url = format!("{BASE_URL}/auth/login");
-    let mut params = HashMap::new();
-    params.insert("username", name);
-    params.insert("password", password);
+    // let mut params = HashMap::new();
+    // params.insert("username", name);
+    // params.insert("password", password);
+    let payload = serde_json::json!({
+        "username": name,
+        "password": password,
+    });
+
     let client = reqwest::Client::new();
-    let res = match client.post(url).json(&params).send().await {
-        Ok(r) => r,
-        Err(e) => {
-            print!("error loging in");
-            return Err(e);
-        }
-    };
+
+    let res = client.post(url).json(&payload).send().await?;
 
     //TODO: data may come back as {error: "messages"}
     //wich can not be turned into a LoginPayload, and will error.
 
-    let data: LoginResponse = res.json().await?;
+    let data: LoginResponse = match res.json().await {
+        Ok(res) => res,
+        Err(e) => panic!("could not get api res into LoginRes: {e}"),
+    };
     let user_info = data.payload;
 
     let path = std::path::Path::new("./token.txt");
@@ -494,7 +557,6 @@ async fn user_login() -> Result<LoginPayload, reqwest::Error> {
     }
 
     print!("{}[2J{}[1;1H", 27 as char, 27 as char);
-    println!("loged in as: {}", params.get("username").unwrap());
     Ok(user_info)
 }
 

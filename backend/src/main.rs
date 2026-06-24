@@ -244,11 +244,21 @@ async fn is_user_in_chat(pool: &PgPool, name: &str, chat_id: &Uuid) -> Result<bo
         SELECT EXISTS (
             SELECT 1
             FROM chat_participants cp
-            JOIN chats c ON cp.chat_id = c.chat_id
-            JOIN chat_tree ct_root ON c.root_message_id = ct_root.message_id
-            WHERE ct_root.parent IS NULL -- This ensures we are at the root of the tree
-              AND ct_root.original_message_id = $2 -- This ensures the given message_id is part of this tree
-              AND cp.user_name = $1
+            JOIN (
+                WITH RECURSIVE chat_ancestry AS (
+                    SELECT message_id, parent
+                    FROM messages
+                    WHERE message_id = $2
+                    UNION ALL
+                    SELECT m.message_id, m.parent
+                    FROM messages m
+                    JOIN chat_ancestry ca ON m.message_id = ca.parent
+                )
+                SELECT message_id
+                FROM chat_ancestry
+                WHERE parent IS NULL
+            ) AS root_message ON cp.chat_id = root_message.message_id
+            WHERE cp.user_name = $1
         )
         "#,
     )
@@ -326,7 +336,7 @@ async fn get_message_id_sender_name_content_parent(
 //TODO: the funtion (and endpoint) has to much responsiblity
 //should have a sepret endpiont+handeler for posting root messages, maybe called create chat
 //
-pub async fn post_message(
+async fn post_message(
     Extension(auth_user): Extension<AuthUser>,
     extract::State(pool): extract::State<PgPool>,
     Json(payload): Json<Message>,
@@ -352,11 +362,11 @@ pub async fn post_message(
     let query =
         "INSERT INTO messages (sender_name, parent, content) VALUES ($1, $2, $3) RETURNING *";
     if let Some(parent) = payload.parent {
-        match is_user_in_chat(&pool, &auth_user.username, &parent).await {
-            Ok(true) => {}
-            Ok(false) => return Json(json!({"status": "error", "error": "Forbidden"})),
-            Err(e) => return Json(json!({"status": "error", "error": e.to_string()})),
-        }
+        // match is_user_in_chat(&pool, &auth_user.username, &parent).await {
+        //     Ok(true) => {}
+        //     Ok(false) => return Json(json!({"status": "error", "error": "Forbidden"})),
+        //     Err(e) => return Json(json!({"status": "error", "error": e.to_string()})),
+        // }
 
         let query =
             "INSERT INTO messages (sender_name, parent, content) VALUES ($1, $2, $3) RETURNING *";
@@ -396,19 +406,7 @@ pub async fn post_message(
 
         //TODO: get rid of the consepts of chats from the DB entierly. a 1 to 1 onto mapping of
         //messge id to another uuid is not helpfull
-        let chat_query = "INSERT INTO chats (root_message_id) VALUES ($1) RETURNING chat_id";
-        let chat_id_result = sqlx::query_scalar::<_, Uuid>(&chat_query)
-            .bind(message.message_id)
-            .fetch_one(&mut *tx)
-            .await;
-
-        let chat_id = match chat_id_result {
-            Ok(id) => id,
-            Err(e) => {
-                let _ = tx.rollback().await;
-                return Json(json!({"res": format!("error: {}", e)}));
-            }
-        };
+        let chat_id = message.message_id;
 
         let participant_query =
             "INSERT INTO chat_participants (chat_id, user_name) VALUES ($1, $2)";

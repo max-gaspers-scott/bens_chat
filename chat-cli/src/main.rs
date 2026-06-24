@@ -64,8 +64,12 @@ impl Window {
         match (&self.state, acction) {
             (Stats::Login, Acction::Login) => self.state = Stats::Chats,
             (Stats::Chats, Acction::GotoConversation { chat_id }) => {
-                self.state = Stats::Conversation { chat_id: chat_id }
+                self.state = Stats::Conversation { chat_id }
             }
+            (Stats::Conversation { chat_id: _ }, Acction::GotoConversation { chat_id }) => {
+                self.state = Stats::Conversation { chat_id }
+            }
+
             (Stats::Chats, Acction::MakeChat) => self.state = Stats::NewChat,
             (Stats::Conversation { chat_id }, Acction::GotoChats) => self.state = Stats::Chats,
             (Stats::NewChat, Acction::MakeChat) => self.state = Stats::Chats,
@@ -107,12 +111,12 @@ impl Window {
         }
         let title = title.trim();
         let content = serde_json::json!({
-            "title": title,
+            "text": title,
         });
         let msg = SendMesage {
             sender_name: login_stuff.username.clone(),
             parent: None,
-            content: content,
+            content,
         };
 
         match send_message(login_stuff, &msg).await {
@@ -157,9 +161,9 @@ impl Window {
         let mut hashmap = HashMap::new();
 
         for c in chats {
-            println!("chat: {}", c.content["title"]);
+            println!("chat: {}", c.content["text"]);
 
-            let chat_name = c.content["title"].as_str().unwrap_or("title was not found");
+            let chat_name = c.content["text"].as_str().unwrap_or("title was not found");
 
             hashmap.insert(chat_name.to_string(), c.message_id);
         }
@@ -214,6 +218,16 @@ impl Window {
                 print!("{}[2J{}[1;1H", 27 as char, 27 as char);
 
                 return Acction::GotoChats;
+            }
+            if message.trim() == "/subchat" {
+                let mut buff = String::new();
+                println!("what chat do you want to see");
+
+                std::io::stdin().read_line(&mut buff).unwrap();
+                let input = buff.trim();
+                return Acction::GotoConversation {
+                    chat_id: Uuid::parse_str(input).unwrap(),
+                };
             }
         }
     }
@@ -284,9 +298,29 @@ struct SendMesage {
     content: serde_json::Value,
 }
 
+#[derive(Debug, serde::Serialize)]
+struct ParentMessage {
+    sender_name: String,
+    parent: Option<uuid::Uuid>,
+    title: String,
+}
+
+impl ParentMessage {
+    fn from_message(msg: &Message) -> Option<ParentMessage> {
+        Some(ParentMessage {
+            sender_name: msg.sender_name.clone(),
+            parent: msg.parent,
+            title: msg.content["title"].to_string(),
+        })
+    }
+}
+
 impl Message {
     fn show(&self) {
-        println!("{}: {}", self.sender_name, self.content["text"]);
+        println!(
+            "{}: {}| {}",
+            self.sender_name, self.content["text"], self.message_id
+        );
     }
 }
 
@@ -303,8 +337,6 @@ impl TextMessage {
 struct MediaMessage {
     message_id: uuid::Uuid,
     sender_id: uuid::Uuid,
-    content: String,
-    sent_at: String,
     minio_url: String,
     username: String,
 }

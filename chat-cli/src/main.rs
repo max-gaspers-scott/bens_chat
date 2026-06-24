@@ -1,13 +1,8 @@
-use chrono;
-use clap::error::ContextKind;
-use core::slice;
 use reqwest::{self, Client};
 use serde::Deserialize;
 use std::collections::HashMap;
-use std::fmt::format;
 use std::fs::OpenOptions;
 use std::io::Write;
-use std::sync::Condvar;
 use uuid::Uuid;
 
 // should be in env, but this will work for now
@@ -234,50 +229,9 @@ impl Window {
 }
 
 #[derive(Debug, serde::Deserialize)]
-enum MesgTypes {
-    Payload(TextMessage), // should be called Text
-    Media(MediaMessage),
-}
-
-impl Showable for MesgTypes {
-    fn show(&self) {
-        match self {
-            MesgTypes::Payload(msg) => msg.show(),
-            MesgTypes::Media(msg) => msg.show(),
-        }
-    }
-}
-
-#[derive(Debug, serde::Deserialize)]
 struct MessageResponce {
     payload: Vec<Message>,
     status: String,
-}
-
-pub trait Showable {
-    fn show(&self);
-}
-
-#[derive(Debug, serde::Deserialize)]
-enum ChatMessage {
-    Text(TextMessage),
-    Media(MediaMessage),
-}
-impl Showable for ChatMessage {
-    fn show(&self) {
-        match self {
-            ChatMessage::Text(msg) => msg.show(),
-            ChatMessage::Media(media) => media.show(),
-        }
-    }
-}
-#[derive(Debug, serde::Deserialize)]
-struct TextMessage {
-    message_id: uuid::Uuid,
-    sender_id: uuid::Uuid,
-    content: String,
-    sent_at: String,
-    username: String,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -298,58 +252,12 @@ struct SendMesage {
     content: serde_json::Value,
 }
 
-#[derive(Debug, serde::Serialize)]
-struct ParentMessage {
-    sender_name: String,
-    parent: Option<uuid::Uuid>,
-    title: String,
-}
-
-impl ParentMessage {
-    fn from_message(msg: &Message) -> Option<ParentMessage> {
-        Some(ParentMessage {
-            sender_name: msg.sender_name.clone(),
-            parent: msg.parent,
-            title: msg.content["title"].to_string(),
-        })
-    }
-}
-
 impl Message {
     fn show(&self) {
         println!(
             "{}: {}| {}",
             self.sender_name, self.content["text"], self.message_id
         );
-    }
-}
-
-impl TextMessage {
-    fn from_message(msg: ChatMessage) -> Option<TextMessage> {
-        match msg {
-            ChatMessage::Text(test_msg) => Some(test_msg),
-            ChatMessage::Media(_) => None,
-        }
-    }
-}
-
-#[derive(Debug, serde::Deserialize)]
-struct MediaMessage {
-    message_id: uuid::Uuid,
-    sender_id: uuid::Uuid,
-    minio_url: String,
-    username: String,
-}
-
-impl Showable for MediaMessage {
-    fn show(&self) {
-        println!("######### show an image ########")
-    }
-}
-
-impl Showable for TextMessage {
-    fn show(&self) {
-        println!("username: {}: {}", self.username, self.content);
     }
 }
 
@@ -409,7 +317,6 @@ async fn get_chats(user_info: &LoginPayload) -> Result<ChatResponce, reqwest::Er
 }
 
 async fn send_message(login: &LoginPayload, message: &SendMesage) -> Result<(), reqwest::Error> {
-    let parent_id = message.parent;
     println!("running send message");
     let url = format!("{BASE_URL}/messages");
     let client = reqwest::Client::new();
@@ -442,65 +349,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut app = Window::new();
     app.run().await;
     Ok(())
-    //
-    // let login = login().await?;
-    //
-    // let chats_raw = get_chats(&login);
-    // let chats = chats_raw.await.unwrap().data;
-    // let mut hashmap = HashMap::new();
-    //
-    // for c in chats {
-    //     println!("chat: {}", c.chat_name);
-    //     hashmap.insert(c.chat_name, c.chat_id);
-    // }
-    //
-    // let mut buff = String::new();
-    // println!("what chat do you want to see");
-    //
-    // std::io::stdin().read_line(&mut buff).unwrap();
-    // let input = buff.trim();
-    // let selected_id = hashmap.get(input).unwrap();
-    //
-    // show_messages(&login, selected_id).await.unwrap();
-    //
-    // loop {
-    //     let mut message = String::new();
-    //     std::io::stdin().read_line(&mut message)?;
-    //     match send_message(&login, &message, selected_id).await {
-    //         Ok(_) => {}
-    //         Err(e) => print!("error sendimg message: {e}"),
-    //     }
-    //     let input = buff.trim();
-    //     let mut selected_id = hashmap.get(input).unwrap();
-    //     if message.trim() == "/update" {
-    //         show_messages(&login, selected_id).await.unwrap();
-    //     }
-    //     if message.trim() == "/exit" {
-    //         let chats_raw = get_chats(&login);
-    //         let chats = chats_raw.await.unwrap().data;
-    //         let mut hashmap = HashMap::new();
-    //         for c in chats {
-    //             println!("chat: {}", c.chat_name);
-    //             hashmap.insert(c.chat_name, c.chat_id);
-    //         }
-    //         // 74f3e359-97b1-4db0-82bc-fc83fd79471d
-    //         // 00000000-0000-0000-0000-000000000000
-    //         hashmap.insert(
-    //             "new".to_string(),
-    //             Uuid::parse_str("00000000-0000-0000-0000-000000000000")
-    //                 .expect("Error getting 0 uuid"),
-    //         );
-    //
-    //         let mut buff = String::new();
-    //         println!("what chat do you want to see");
-    //
-    //         std::io::stdin().read_line(&mut buff)?;
-    //         // selected_id = hashmap.get(&buff).unwrap();
-    //
-    //         print!("{}[2J{}[1;1H", 27 as char, 27 as char);
-    //     }
-    //     show_messages(&login, selected_id).await.unwrap();
-    // }
 }
 
 async fn user_login() -> Result<LoginPayload, reqwest::Error> {
@@ -556,14 +404,6 @@ async fn user_login() -> Result<LoginPayload, reqwest::Error> {
     Ok(user_info)
 }
 
-// save token
-// cli
-// login
-// see chats
-// go into a chat and see messages
-// send messages
-//
-//
 pub fn write_file(path: &std::path::Path, text: &str) -> Result<(), std::io::Error> {
     let mut file = OpenOptions::new().create(true).write(true).open(path)?;
     file.write_all(text.as_bytes())?;

@@ -1,10 +1,11 @@
 // minio stuff
 use dotenv::dotenv;
-use minio_rsc::Minio;
 use minio_rsc::client::PresignedArgs;
 use minio_rsc::provider::StaticProvider;
+use minio_rsc::{Minio, xml::ser::to_string};
 use reqwest::header::{ACCEPT, CONTENT_TYPE as CT};
 use serde::{Deserialize, Serialize};
+use std::cmp::min;
 
 mod auth;
 mod models;
@@ -341,23 +342,37 @@ async fn post_message(
     extract::State(pool): extract::State<PgPool>,
     Json(payload): Json<Message>,
 ) -> Json<Value> {
-    // if first_word == "@gemini" {
-    //     println!("message starts with @gemini");
-    //     let gem_res = match gemini(&value.content).await {
-    //         Ok(res) => res,
-    //         Err(e) => format!("Error generating content: {}", e),
-    //     };
-    //     let _ = sqlx::query_as::<_, Message>(
-    //         "INSERT INTO messages (chat_id, sender_id, content, minio_url) VALUES ($1, $2, $3, $4) RETURNING *",
-    //     )
-    //     .bind(payload.chat_id)
-    //     .bind(auth_user.user_id) // why not gemini a
-    //         // hardcoded uuid of gemini??
-    //     .bind(gem_res)
-    //     .bind(payload.minio_url)
-    //     .fetch_one(&pool)
-    //     .await;
-    // }
+    let text = &payload
+        .content
+        .get("text")
+        .and_then(|v| v.as_str())
+        .unwrap_or("not_gemini");
+    let gemint_text = text[0..min(text.len(), 7)].to_string();
+    println!("test is: {gemint_text}");
+    println!("seeing if messages starts wtih gemini");
+    if &gemint_text == "@gemini" {
+        println!("message starts with @gemini");
+        let gem_res = match gemini(&payload.content["text"].to_string()).await {
+            Ok(res) => res,
+            Err(e) => format!("Error generating content: {}", e),
+        };
+
+        let content = serde_json::json!({
+            "text": gem_res,
+        });
+        let user_copy = auth_user.username.clone();
+        let post_gemini_res = sqlx::query_as::<_, Message>(
+            "INSERT INTO messages (sender_name, parent, content) VALUES ($1, $2, $3) RETURNING *",
+        )
+        .bind(user_copy) // why not gemini a
+        // hardcoded uuid of gemini??
+        .bind(payload.parent)
+        .bind(content)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    }
+
     // change hardcoded number of values
     let query =
         "INSERT INTO messages (sender_name, parent, content) VALUES ($1, $2, $3) RETURNING *";

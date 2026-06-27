@@ -14,7 +14,7 @@ jest.mock('./SendMessage', () => () => <div data-testid="send-message" />);
 window.HTMLElement.prototype.scrollIntoView = jest.fn();
 
 test('renders empty state when no chatId is provided', () => {
-  render(<ChatView chatId={null} currentUser={{ user_id: 'user-1' }} />);
+  render(<ChatView chatId={null} currentUser={{ username: 'user-1' }} />);
   expect(screen.getByText(/Select a chat to view messages/i)).toBeInTheDocument();
   expect(screen.getByText(/You can create a chat/i)).toBeInTheDocument();
 });
@@ -25,20 +25,20 @@ test('renders all messages returned for a chat', async () => {
     payload: [
       {
         message_id: 'message-1',
-        sender_id: 'user-1',
-        content: 'Hello there',
+        sender_name: 'user-1',
+        content: { text: 'Hello there' },
         sent_at: '2024-01-01T00:00:00Z',
       },
       {
         message_id: 'message-2',
-        sender_id: 'user-2',
-        content: 'General Kenobi',
+        sender_name: 'user-2',
+        content: { text: 'General Kenobi' },
         sent_at: '2024-01-01T00:01:00Z',
       },
     ],
   });
 
-  render(<ChatView chatId="chat-1" currentUser={{ user_id: 'user-1' }} />);
+  render(<ChatView chatId="chat-1" currentUser={{ username: 'user-1' }} />);
 
   expect(screen.getByText(/loading messages/i)).toBeInTheDocument();
   expect(await screen.findByText('Hello there')).toBeInTheDocument();

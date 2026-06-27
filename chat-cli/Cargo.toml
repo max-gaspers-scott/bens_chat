@@ -14,3 +14,4 @@ tokio = { version = "1", features = ["full", "time"] }
 clap = { version = "4.5.56", features = ["derive"] }
 
 chrono = { version = "0.4", features = ["serde"] } # For Utc
+termimad = "0.31"                                  # Use the latest version available

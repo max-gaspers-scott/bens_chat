@@ -30,29 +30,25 @@ function CreateChat({ currentUser, onChatCreated }) {
     setLoading(true);
 
     try {
-      // Step 1: Create the chat
-      const chatResult = await api.createChat(chatName);
+      // Step 1: Create the chat (posts a root message; the creator is added as a
+      // participant by the backend automatically).
+      const chatResult = await api.createChat({
+        sender_name: currentUser.username,
+        title: chatName,
+      });
       if (chatResult.res !== 'success') {
         throw new Error('Failed to create chat');
       }
-      const chat_id = chatResult.data.chat_id;
+      const chat_id = chatResult.data.message_id;
 
-      // Step 2: Link current user to the chat
-      const linkResult = await api.linkUserToChat(currentUser.user_id, chat_id);
-      if (linkResult.res !== 'success') {
-        throw new Error('Failed to join chat');
-      }
-
-      // Step 3: Look up other users by username and link them
+      // Step 2: Link the other participants to the chat by username.
       const usernameList = participants
         .map((u) => u.trim())
         .filter((u) => u.length > 0);
 
       for (const username of usernameList) {
-        const userResult = await api.getUserByUsername(username);
-        if (userResult.status === 'success' && userResult.payload) {
-          await api.linkUserToChat(userResult.payload.user_id, chat_id);
-        } else {
+        const linkResult = await api.linkUserToChat(username, chat_id);
+        if (linkResult.res !== 'success') {
           setError(`User "${username}" not found, but chat was created.`);
         }
       }

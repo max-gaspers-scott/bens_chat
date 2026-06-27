@@ -3,6 +3,7 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use std::fs::OpenOptions;
 use std::io::Write;
+use termimad::print_text;
 use uuid::Uuid;
 
 // should be in env, but this will work for now
@@ -113,6 +114,17 @@ impl Window {
             parent: None,
             content,
         };
+        let mut person = String::new();
+        //TODO: make new stat for adding people to chat
+        //should let anyone in a chant add a new user???
+        // while person != "/q" {
+        //     println!("who do you want to add to the chat. /q to exit");
+        //     match std::io::stdin().read_line(&mut person) {
+        //         Ok(_) => {}
+        //         Err(e) => println!("error reading person name"),
+        //     }
+        //     let person = person.trim();
+        // }
 
         match send_message(login_stuff, &msg).await {
             Ok(_) => {}
@@ -202,12 +214,10 @@ impl Window {
                 parent: Some(chat_id),
                 content,
             };
-            match send_message(login_stuff, &msg).await {
-                Ok(_) => {}
-                Err(e) => print!("error sendimg message: {e}"),
-            }
+
             if message.trim() == "/update" {
                 show_messages(&login_stuff, &chat_id).await.unwrap();
+                continue;
             }
             if message.trim() == "/exit" {
                 print!("{}[2J{}[1;1H", 27 as char, 27 as char);
@@ -223,6 +233,10 @@ impl Window {
                 return Acction::GotoConversation {
                     chat_id: Uuid::parse_str(input).unwrap(),
                 };
+            }
+            match send_message(login_stuff, &msg).await {
+                Ok(_) => {}
+                Err(e) => print!("error sendimg message: {e}"),
             }
         }
     }
@@ -254,10 +268,13 @@ struct SendMesage {
 
 impl Message {
     fn show(&self) {
-        println!(
+        let temp_text = format!(
             "{}: {}| {}",
-            self.sender_name, self.content["text"], self.message_id
+            self.sender_name, self.content["text"], self.message_id,
         );
+        let raw = self.content["text"].to_string();
+        let fixed_input = raw.replace("\\n", "\n");
+        print_text(&fixed_input);
     }
 }
 

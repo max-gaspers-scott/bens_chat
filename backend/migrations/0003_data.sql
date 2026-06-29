@@ -164,10 +164,11 @@ JOIN _chat_to_root_msg m ON m.old_chat_id = om.chat_id;
 
 INSERT INTO chat_participants (chat_id, user_name)
 SELECT
-    uc.chat_id,        -- same UUID reused in new chats table
+    m.new_message_id,        -- Reuses the new root message_id mapped from the old chat_id
     u.username
 FROM _old_user_chats uc
 JOIN _old_users u ON u.user_id = uc.user_id
+JOIN _chat_to_root_msg m ON m.old_chat_id = uc.chat_id
 ON CONFLICT (chat_id, user_name) DO NOTHING;
 
 -- ---------------------------------------------------------------------------

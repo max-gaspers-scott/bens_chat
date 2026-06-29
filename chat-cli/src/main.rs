@@ -8,7 +8,7 @@ use uuid::Uuid;
 
 // should be in env, but this will work for now
 // const PORT: u32 = 8081;
-const BASE_URL: &str = "http://localhost:8081";
+const BASE_URL: &str = "http://localhost:9821";
 
 #[derive(Debug)]
 enum Stats {

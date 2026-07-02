@@ -8,7 +8,8 @@ use uuid::Uuid;
 
 // should be in env, but this will work for now
 // const PORT: u32 = 8081;
-const BASE_URL: &str = "http://localhost:9821";
+// const BASE_URL: &str = "http://localhost:9821";
+const BASE_URL: &str = "https://bens-chat.team-stingray.com";
 
 #[derive(Debug)]
 enum Stats {
@@ -75,7 +76,7 @@ impl Window {
     }
     async fn run(&mut self) {
         loop {
-            // Match the state, execute the screen logic, and get the resulting action
+            // Match the state, execute the logic, and get the resulting action
             let action = match &self.state {
                 Stats::Login => self.handel_login().await,
                 Stats::Chats => self.handel_chats().await,
@@ -168,9 +169,11 @@ impl Window {
         let mut hashmap = HashMap::new();
 
         for c in chats {
-            println!("chat: {}", c.content["text"]);
+            println!("chat: {}", c.content.json_value["text"]);
 
-            let chat_name = c.content["text"].as_str().unwrap_or("title was not found");
+            let chat_name = c.content.json_value["text"]
+                .as_str()
+                .unwrap_or("title was not found");
 
             hashmap.insert(chat_name.to_string(), c.message_id);
         }
@@ -254,9 +257,23 @@ struct Message {
     message_id: uuid::Uuid,
     sender_name: String,
     parent: Option<uuid::Uuid>,
-    content: serde_json::Value,
+    #[serde(flatten)] // look into this
+    content: SendibleContent,
     #[serde(default)]
     sent_at: chrono::DateTime<chrono::Utc>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct SendibleContent {
+    json_value: serde_json::Value,
+}
+
+impl SendibleContent {
+    fn show(&self) {
+        let raw = self.json_value["text"].to_string();
+        let fixed_input = raw.replace("\\n", "\n");
+        println!("{fixed_input}");
+    }
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -268,13 +285,8 @@ struct SendMesage {
 
 impl Message {
     fn show(&self) {
-        let temp_text = format!(
-            "{}: {}| {}",
-            self.sender_name, self.content["text"], self.message_id,
-        );
-        let raw = self.content["text"].to_string();
-        let fixed_input = raw.replace("\\n", "\n");
-        print_text(&fixed_input);
+        println!("id:{}\n{}: ", self.sender_name, self.message_id,);
+        self.content.show();
     }
 }
 

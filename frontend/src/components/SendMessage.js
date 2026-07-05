@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { api } from '../api/api';
 
-function SendMessage({ chatId, senderId, onMessageSent }) {
+function SendMessage({ chatId, senderName, onMessageSent }) {
   const [content, setContent] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -39,10 +39,15 @@ function SendMessage({ chatId, senderId, onMessageSent }) {
         minioKey = object_key;
       }
 
+      const messageContent = { text: content.trim() || '' };
+      if (minioKey) {
+        messageContent.url = minioKey;
+      }
+
       const result = await api.sendMessage({
-        chat_id: chatId,
-        content: content.trim() || '',
-        minio_url: minioKey,
+        sender_name: senderName,
+        parent: chatId,
+        content: messageContent,
       });
 
       if (result.res === 'success') {

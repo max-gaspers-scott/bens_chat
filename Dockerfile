@@ -13,13 +13,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends pkg-config libs
 WORKDIR /app
 
 # Cache dependencies first – copy manifest files only
-# COPY Cargo.toml Cargo.lock ./
+COPY backend/Cargo.toml backend/Cargo.lock ./
 
 # Set the default toolchain to nightly
 RUN rustup default nightly
 
 # Dummy main to build dependency layers and speed up subsequent builds
-# RUN echo "fn main() {}" > src/main.rs #     && cargo build --release #     && rm -rf src
+# RUN mkdir -p src && echo "fn main() {}" > src/main.rs && cargo build --release && rm -rf src
 
 # Copy the actual source tree and build the real binary
 COPY backend ./

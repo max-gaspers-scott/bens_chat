@@ -17,8 +17,7 @@ function Login({ onLoginSuccess }) {
       if (result.status === 'success' && result.payload) {
         api.setToken(result.payload.token);
         onLoginSuccess({
-          user_id: result.payload.user_id,
-          username,
+          username: result.payload.username,
           token: result.payload.token,
         });
       } else {

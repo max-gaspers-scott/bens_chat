@@ -26,7 +26,7 @@ describe('api auth helpers', () => {
     );
   });
 
-  test('signUp sends password instead of password_hash', async () => {
+  test('signUp maps fields to the backend user schema', async () => {
     await api.signUp({
       username: 'alice',
       email: 'alice@example.com',
@@ -38,10 +38,10 @@ describe('api auth helpers', () => {
       '/users',
       expect.objectContaining({
         body: JSON.stringify({
-          username: 'alice',
-          email: 'alice@example.com',
-          password: 'secret',
+          name: 'alice',
           phone_number: null,
+          email: 'alice@example.com',
+          password_hash: 'secret',
         }),
       }),
     );
@@ -53,7 +53,7 @@ describe('api auth helpers', () => {
     await api.getMessages('chat-1');
 
     expect(fetch).toHaveBeenCalledWith(
-      '/messages?chat_id=chat-1',
+      '/messages?parent=chat-1',
       expect.objectContaining({
         headers: expect.objectContaining({
           Authorization: 'Bearer token-123',

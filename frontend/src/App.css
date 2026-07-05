@@ -449,6 +449,20 @@ body {
   opacity: 0.8;
 }
 
+.subchat-nav {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.subchat-btn {
+  margin-top: 6px;
+  padding: 0;
+  font-size: 0.75rem;
+  color: inherit;
+  opacity: 0.85;
+}
+
 /* Send Message */
 .send-message {
   padding: 15px 20px;

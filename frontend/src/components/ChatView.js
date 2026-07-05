@@ -30,11 +30,27 @@ const ChatImage = memo(function ChatImage({ objectKey }) {
 function ChatView({ chatId, currentUser }) {
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
+  // Navigation stack of parents. The first entry is the chat's root message;
+  // each additional entry is a message the user opened as a sub-chat.
+  const [parentStack, setParentStack] = useState(() =>
+    chatId ? [{ id: chatId, label: 'Chat' }] : []
+  );
   const messagesEndRef = useRef(null);
 
+  const currentParent = parentStack.length ? parentStack[parentStack.length - 1] : null;
+  const currentParentId = currentParent ? currentParent.id : null;
+
+  // Reset the navigation stack whenever the selected chat changes.
+  useEffect(() => {
+    setParentStack(chatId ? [{ id: chatId, label: 'Chat' }] : []);
+  }, [chatId]);
+
   const loadMessages = useCallback(async () => {
+    if (!currentParentId) {
+      return;
+    }
     try {
-      const result = await api.getMessages(chatId);
+      const result = await api.getMessages(currentParentId);
       if (result.status === 'success' && result.payload) {
         setMessages((prevMessages) => {
           // Only update if messages have actually changed
@@ -54,10 +70,16 @@ function ChatView({ chatId, currentUser }) {
     } finally {
       setLoading(false);
     }
-  }, [chatId]);
+  }, [currentParentId]);
+
+  // Clear messages and show the loading state when navigating to a new parent.
+  useEffect(() => {
+    setMessages([]);
+    setLoading(true);
+  }, [currentParentId]);
 
   useEffect(() => {
-    if (!chatId) {
+    if (!currentParentId) {
       return;
     }
 
@@ -72,10 +94,22 @@ function ChatView({ chatId, currentUser }) {
         clearInterval(intervalId);
       }
     };
-  }, [chatId, loadMessages]);
+  }, [currentParentId, loadMessages]);
 
   const handleRefresh = () => {
     loadMessages();
+  };
+
+  // Open the children of a message as a nested sub-chat.
+  const openSubChat = (msg) => {
+    const text = msg.content && msg.content.text ? msg.content.text.trim() : '';
+    const label = text ? text.slice(0, 30) : 'Sub-chat';
+    setParentStack((stack) => [...stack, { id: msg.message_id, label }]);
+  };
+
+  // Navigate back up the sub-chat stack to the given depth.
+  const goToParent = (index) => {
+    setParentStack((stack) => stack.slice(0, index + 1));
   };
 
   // Scroll to bottom when messages change
@@ -97,7 +131,20 @@ function ChatView({ chatId, currentUser }) {
   return (
     <div className="chat-view">
       <div className="chat-header">
-        <h3>Chat</h3>
+        {parentStack.length > 1 ? (
+          <div className="subchat-nav">
+            <button
+              type="button"
+              className="link-btn"
+              onClick={() => goToParent(parentStack.length - 2)}
+            >
+              ← Back
+            </button>
+            <h3>{currentParent.label}</h3>
+          </div>
+        ) : (
+          <h3>Chat</h3>
+        )}
       </div>
       <div className="messages-container">
         {loading ? (
@@ -108,26 +155,36 @@ function ChatView({ chatId, currentUser }) {
           messages.map((msg, index) => (
             <div
               key={msg.message_id || index}
-              className={`message ${msg.sender_id === currentUser.user_id ? 'own' : 'other'}`}
+              className={`message ${msg.sender_name === currentUser.username ? 'own' : 'other'}`}
             >
-              {msg.content && msg.content.trim() && (
-                <div className="message-content">{msg.content}</div>
+              {msg.content && msg.content.text && msg.content.text.trim() && (
+                <div className="message-content">{msg.content.text}</div>
               )}
-              {msg.minio_url && <ChatImage objectKey={msg.minio_url} />}
+              {msg.content && msg.content.url && <ChatImage objectKey={msg.content.url} />}
               <div className="message-meta">
                 <span className="message-sender">
-                  {msg.sender_id === currentUser.user_id ? 'You' : msg.username}
+                  {msg.sender_name === currentUser.username ? 'You' : msg.sender_name}
                 </span>
                 <span className="message-time">
                   {msg.sent_at ? new Date(msg.sent_at).toLocaleString() : ''}
                 </span>
               </div>
+              {msg.message_id && (
+                <button
+                  type="button"
+                  className="link-btn subchat-btn"
+                  onClick={() => openSubChat(msg)}
+                  title="Open a sub-chat from this message"
+                >
+                  💬 Open sub-chat
+                </button>
+              )}
             </div>
           ))
         )}
         <div ref={messagesEndRef} />
       </div>
-      <SendMessage chatId={chatId} senderId={currentUser.user_id} onMessageSent={handleRefresh} />
+      <SendMessage chatId={currentParentId} senderName={currentUser.username} onMessageSent={handleRefresh} />
     </div>
   );
 }

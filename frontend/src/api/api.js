@@ -77,16 +77,19 @@ export const api = {
     return response.text();
   },
 
-  // Sign up - create a new user
+  // Sign up - create a new user.
+  // The backend `users` table keys on `name`, and the create-user handler hashes
+  // whatever it receives in the `password_hash` field, so the plaintext password
+  // is sent there.
   async signUp({ username, email, password, phone_number }) {
     const response = await apiFetch(`${API_BASE_URL}/users`, {
       method: 'POST',
       headers: jsonHeaders(),
       body: JSON.stringify({
-        username,
-        email,
-        password,
+        name: username,
         phone_number: phone_number || null,
+        email,
+        password_hash: password,
       }),
     });
     return response.json();
@@ -102,54 +105,59 @@ export const api = {
     return response.json();
   },
 
-  // Create a new chat
-  async createChat(chat_name) {
-    const response = await apiFetch(`${API_BASE_URL}/chats`, {
-      method: 'POST',
-      headers: authHeaders(),
-      body: JSON.stringify({
-        chat_name,
-      }),
-    });
-    return response.json();
-  },
-
-  // Link a user to a chat
-  async linkUserToChat(user_id, chat_id) {
-    const response = await apiFetch(`${API_BASE_URL}/user-chats`, {
-      method: 'POST',
-      headers: authHeaders(),
-      body: JSON.stringify({ user_id, chat_id }),
-    });
-    return response.json();
-  },
-
-  // Get user's chats
-  async getUserChats(user_id) {
-    const response = await apiFetch(`${API_BASE_URL}/user-chats?user_id=${user_id}`, {
-      headers: authHeaders(),
-    });
-    return response.json();
-  },
-
-  // Get messages for a chat
-  async getMessages(chat_id) {
-    const response = await apiFetch(`${API_BASE_URL}/messages?chat_id=${chat_id}`, {
-      headers: authHeaders(),
-    });
-    return response.json();
-  },
-
-  // Send a message (minio_url is optional — pass the object key if an image was uploaded)
-  async sendMessage({ chat_id, content, minio_url }) {
+  // Create a new chat by posting a root message (parent = null). The backend
+  // also registers the sender as a participant of the new chat.
+  async createChat({ sender_name, title }) {
     const response = await apiFetch(`${API_BASE_URL}/messages`, {
       method: 'POST',
       headers: authHeaders(),
       body: JSON.stringify({
-        chat_id,
-        content,
-        minio_url: minio_url || null,
+        sender_name,
+        parent: null,
+        content: { text: title },
       }),
+    });
+    return response.json();
+  },
+
+  // Link a user to a chat (add a participant). chat_id is the chat's root message id.
+  async linkUserToChat(user_name, chat_id) {
+    const response = await apiFetch(`${API_BASE_URL}/user-chats`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({
+        chat_participant_id: crypto.randomUUID(),
+        chat_id,
+        user_name,
+      }),
+    });
+    return response.json();
+  },
+
+  // Get the chats (root messages) a user participates in
+  async getUserChats(username) {
+    const response = await apiFetch(
+      `${API_BASE_URL}/user-chats?username=${encodeURIComponent(username)}`,
+      { headers: authHeaders() }
+    );
+    return response.json();
+  },
+
+  // Get messages for a chat (children of the chat's root message)
+  async getMessages(parent) {
+    const response = await apiFetch(
+      `${API_BASE_URL}/messages?parent=${encodeURIComponent(parent)}`,
+      { headers: authHeaders() }
+    );
+    return response.json();
+  },
+
+  // Send a message. content is the message body object ({ text, url? }) stored as JSONB.
+  async sendMessage({ sender_name, parent, content }) {
+    const response = await apiFetch(`${API_BASE_URL}/messages`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ sender_name, parent, content }),
     });
     return response.json();
   },
@@ -184,14 +192,6 @@ export const api = {
     return rewriteMinioHost(data.url);
   },
 
-  // Get user by username (for looking up users to add to chat)
-  async getUserByUsername(username) {
-    const response = await apiFetch(`${API_BASE_URL}/users?username=${username}`, {
-      headers: authHeaders(),
-    });
-    return response.json();
-  },
-
   // Set/Change password
   async setPassword(new_password) {
     const response = await apiFetch(
@@ -204,3 +204,4 @@ export const api = {
     return response.json();
   },
 };
+

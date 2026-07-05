@@ -6,18 +6,25 @@ function ChatList({ currentUser, onSelectChat, selectedChatId }) {
   const [loading, setLoading] = useState(true);
 
   const loadChats = useCallback(async () => {
+    if (!currentUser || !currentUser.username) {
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     try {
-      const result = await api.getUserChats(currentUser.user_id);
-      if (result.status === 'success' && result.data) {
-        setChats(result.data);
+      const result = await api.getUserChats(currentUser.username);
+      if (result.status === 'success' && result.payload) {
+        setChats(result.payload);
+      } else {
+        console.error('Failed to load chats:', result.status, result.message || 'Unknown error');
       }
     } catch (err) {
       console.error('Failed to load chats:', err);
     } finally {
       setLoading(false);
     }
-  }, [currentUser.user_id]);
+  }, [currentUser]);
 
   useEffect(() => {
     loadChats();
@@ -44,11 +51,11 @@ function ChatList({ currentUser, onSelectChat, selectedChatId }) {
       <ul>
         {chats.map((chat) => (
           <li
-            key={chat.chat_id}
-            className={selectedChatId === chat.chat_id ? 'active' : ''}
-            onClick={() => onSelectChat(chat.chat_id)}
+            key={chat.message_id}
+            className={selectedChatId === chat.message_id ? 'active' : ''}
+            onClick={() => onSelectChat(chat.message_id)}
           >
-            {chat.chat_name || 'Unnamed Chat'}
+            {(chat.content && chat.content.text) || 'Unnamed Chat'}
           </li>
         ))}
       </ul>

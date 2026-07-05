@@ -155,7 +155,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             if !already_applied {
                 println!("Applying migration {}: {}...", version, description);
                 let mut tx = pool.begin().await?;
-                sqlx::query(sql).execute(&mut *tx).await?;
+                
+                // Use sqlx::raw_sql to execute a multi-statement raw SQL string instead of a single prepared statement
+                sqlx::raw_sql(sql).execute(&mut *tx).await?;
 
                 sqlx::query(
                     "INSERT INTO _sqlx_migrations (version, description, checksum, success) 

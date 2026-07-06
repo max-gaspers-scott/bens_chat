@@ -55,7 +55,7 @@ function ChatList({ currentUser, onSelectChat, selectedChatId }) {
             className={selectedChatId === chat.message_id ? 'active' : ''}
             onClick={() => onSelectChat(chat.message_id)}
           >
-            {(chat.content && chat.content.text) || 'Unnamed Chat'}
+            {(chat.content && (chat.content.title || chat.content.text)) || 'Unnamed Chat'}
           </li>
         ))}
       </ul>

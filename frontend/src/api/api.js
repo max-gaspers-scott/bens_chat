@@ -114,7 +114,7 @@ export const api = {
       body: JSON.stringify({
         sender_name,
         parent: null,
-        content: { text: title },
+        content: { title: title },
       }),
     });
     return response.json();
@@ -204,4 +204,5 @@ export const api = {
     return response.json();
   },
 };
+
 

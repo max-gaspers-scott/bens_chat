@@ -130,38 +130,41 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 success BOOLEAN NOT NULL DEFAULT TRUE,
                 checksum BYTEA NOT NULL,
                 execution_time BIGINT NOT NULL DEFAULT 0
-            )"
+            )",
         )
         .execute(pool)
         .await?;
 
         let migrations = vec![
             (1, "data", include_str!("../migrations/0001_data.sql")),
-            (2, "add minio url", include_str!("../migrations/0002_add_minio_url.sql")),
+            (
+                2,
+                "add minio url",
+                include_str!("../migrations/0002_add_minio_url.sql"),
+            ),
             (3, "data", include_str!("../migrations/0003_data.sql")),
         ];
 
         for (version, description, sql) in migrations {
             // Check if version is already applied
-            let row: Option<(bool,)> = sqlx::query_as(
-                "SELECT EXISTS(SELECT 1 FROM _sqlx_migrations WHERE version = $1)"
-            )
-            .bind(version)
-            .fetch_optional(pool)
-            .await?;
+            let row: Option<(bool,)> =
+                sqlx::query_as("SELECT EXISTS(SELECT 1 FROM _sqlx_migrations WHERE version = $1)")
+                    .bind(version)
+                    .fetch_optional(pool)
+                    .await?;
 
             let already_applied = row.map(|r| r.0).unwrap_or(false);
 
             if !already_applied {
                 println!("Applying migration {}: {}...", version, description);
                 let mut tx = pool.begin().await?;
-                
+
                 // Use sqlx::raw_sql to execute a multi-statement raw SQL string instead of a single prepared statement
                 sqlx::raw_sql(sql).execute(&mut *tx).await?;
 
                 sqlx::query(
                     "INSERT INTO _sqlx_migrations (version, description, checksum, success) 
-                     VALUES ($1, $2, $3, TRUE)"
+                     VALUES ($1, $2, $3, TRUE)",
                 )
                 .bind(version)
                 .bind(description)
@@ -172,7 +175,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 tx.commit().await?;
                 println!("Migration {} completed successfully!", version);
             } else {
-                println!("Migration {} already applied, skipping validation.", version);
+                println!(
+                    "Migration {} already applied, skipping validation.",
+                    version
+                );
             }
         }
         Ok(())

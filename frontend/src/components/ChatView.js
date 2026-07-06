@@ -102,7 +102,7 @@ function ChatView({ chatId, currentUser }) {
 
   // Open the children of a message as a nested sub-chat.
   const openSubChat = (msg) => {
-    const text = msg.content && msg.content.text ? msg.content.text.trim() : '';
+    const text = msg.content ? (msg.content.title || msg.content.text || '').trim() : '';
     const label = text ? text.slice(0, 30) : 'Sub-chat';
     setParentStack((stack) => [...stack, { id: msg.message_id, label }]);
   };
@@ -157,8 +157,8 @@ function ChatView({ chatId, currentUser }) {
               key={msg.message_id || index}
               className={`message ${msg.sender_name === currentUser.username ? 'own' : 'other'}`}
             >
-              {msg.content && msg.content.text && msg.content.text.trim() && (
-                <div className="message-content">{msg.content.text}</div>
+              {msg.content && (msg.content.title || msg.content.text) && (msg.content.title || msg.content.text).trim() && (
+                <div className="message-content">{msg.content.title || msg.content.text}</div>
               )}
               {msg.content && msg.content.url && <ChatImage objectKey={msg.content.url} />}
               <div className="message-meta">

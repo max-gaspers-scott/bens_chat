@@ -8,8 +8,8 @@ use uuid::Uuid;
 
 // should be in env, but this will work for now
 // const PORT: u32 = 8081;
-const BASE_URL: &str = "http://localhost:9821";
-// const BASE_URL: &str = "https://bens-chat.team-stingray.com";
+// const BASE_URL: &str = "http://localhost:9821";
+const BASE_URL: &str = "https://bens-chat.team-stingray.com";
 
 #[derive(Debug)]
 enum Stats {
@@ -169,9 +169,9 @@ impl Window {
         let mut hashmap = HashMap::new();
 
         for c in chats {
-            println!("chat: {}", c.content.json_value["text"]);
+            println!("chat: {}", c.content.content["title"]);
 
-            let chat_name = c.content.json_value["text"]
+            let chat_name = c.content.content["title"]
                 .as_str()
                 .unwrap_or("title was not found");
 
@@ -265,12 +265,12 @@ struct Message {
 
 #[derive(Debug, serde::Deserialize)]
 struct SendibleContent {
-    json_value: serde_json::Value,
+    content: serde_json::Value,
 }
 
 impl SendibleContent {
     fn show(&self) {
-        let raw = self.json_value["text"].to_string();
+        let raw = self.content["text"].to_string();
         let fixed_input = raw.replace("\\n", "\n");
         println!("{fixed_input}");
     }

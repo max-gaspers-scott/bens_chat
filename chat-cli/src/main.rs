@@ -271,8 +271,8 @@ struct SendibleContent {
 impl SendibleContent {
     fn show(&self) {
         let raw = self.content["text"].to_string();
-        let fixed_input = raw.replace("\\n", "\n");
-        println!("{fixed_input}");
+        let fixed_input = raw.replace("\\n", "\n").replace("\\", "");
+        print_text(&fixed_input);
     }
 }
 

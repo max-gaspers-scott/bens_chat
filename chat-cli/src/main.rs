@@ -2,6 +2,7 @@ use reqwest::{self, Client};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::fs::OpenOptions;
+use std::future::Future;
 use std::io::Write;
 use termimad::print_text;
 use uuid::Uuid;
@@ -204,7 +205,8 @@ impl Window {
         }
         .unwrap();
         loop {
-            show_messages(&login_stuff, &chat_id).await.unwrap();
+            get_and_show_msg(&login_stuff, &chat_id).await;
+
             println!("------------------");
             println!("your message: ");
             let mut message = String::new();
@@ -219,7 +221,7 @@ impl Window {
             };
 
             if message.trim() == "/update" {
-                show_messages(&login_stuff, &chat_id).await.unwrap();
+                get_and_show_msg(&login_stuff, &chat_id).await;
                 continue;
             }
             if message.trim() == "/exit" {
@@ -364,13 +366,17 @@ async fn send_message(login: &LoginPayload, message: &SendMesage) -> Result<(), 
     Ok(())
 }
 
-async fn show_messages(login: &LoginPayload, selected_id: &Uuid) -> Result<(), reqwest::Error> {
-    let messages = get_messages(&login, selected_id).await.unwrap();
+async fn show_messages(messages: &[Message]) -> Result<(), reqwest::Error> {
     print!("{}[2J{}[1;1H", 27 as char, 27 as char);
     for m in messages {
         m.show();
     }
     Ok(())
+}
+
+async fn get_and_show_msg(login_stuff: &LoginPayload, chat_id: &Uuid) {
+    let messages = get_messages(&login_stuff, &chat_id).await.unwrap();
+    show_messages(&messages).await.unwrap();
 }
 
 #[tokio::main]

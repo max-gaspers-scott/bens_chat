@@ -424,17 +424,21 @@ async fn post_message(
         let content = serde_json::json!({
             "text": gem_res,
         });
+        let query =
+            "INSERT INTO messages (sender_name, parent, content) VALUES ($1, $2, $3) RETURNING *";
         let user_copy = auth_user.username.clone();
-        let post_gemini_res = sqlx::query_as::<_, Message>(
-            "INSERT INTO messages (sender_name, parent, content) VALUES ($1, $2, $3) RETURNING *",
-        )
-        .bind(user_copy) // why not gemini a
-        // hardcoded uuid of gemini??
-        .bind(payload.parent)
-        .bind(content)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+
+        let q = sqlx::query_as::<_, Message>(query)
+            .bind(user_copy) // why not gemini a
+            // hardcoded uuid of gemini??
+            .bind(payload.parent)
+            .bind(content);
+
+        let post_gemini_res = q.fetch_one(&pool).await;
+        match post_gemini_res {
+            Ok(value) => (),
+            Err(e) => println!("error happend trying to post gemini responce: {e}"),
+        }
     }
 
     // change hardcoded number of values

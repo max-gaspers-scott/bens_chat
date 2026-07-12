@@ -8,3 +8,5 @@ pub mod note;
 pub use note::*;
 pub mod user;
 pub use user::*;
+pub mod mis;
+pub use mis::*;

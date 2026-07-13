@@ -1,5 +1,10 @@
 use reqwest::{self, Client};
-use rust_socketio::{ClientBuilder, Payload};
+
+use futures_util::FutureExt;
+use rust_socketio::{
+    Payload,
+    asynchronous::{Client as wsClient, ClientBuilder},
+};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::fs::OpenOptions;
@@ -387,6 +392,36 @@ async fn get_and_show_msg(login_stuff: &LoginPayload, chat_id: &Uuid) {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let callback = |payload: Payload, socket: wsClient| {
+        async move {
+            match payload {
+                Payload::Text(values) => println!("Received: {:#?}", values),
+                Payload::Binary(bin_data) => println!("Received bytes: {:#?}", bin_data),
+                // This variant is deprecated, use Payload::Text instead
+                Payload::String(str) => println!("Received: {}", str),
+            }
+            socket
+                .emit("test", serde_json::json!({"got ack": true}))
+                .await
+                .expect("Server unreachable")
+        }
+        .boxed()
+    };
+    let mut socket = ClientBuilder::new(BASE_URL)
+        .namespace("/test")
+        .on("test", callback)
+        .on("error", |err, _| {
+            async move { eprintln!("Error: {:#?}", err) }.boxed()
+        })
+        .connect()
+        .await
+        .expect("Connection failed");
+    let json_payload = serde_json::json!({"token": 123});
+    socket
+        .emit("foo", json_payload)
+        .await
+        .expect("Server unreachable");
+
     let mut app = Window::new();
     app.run().await;
     Ok(())
@@ -452,19 +487,6 @@ pub fn write_file(path: &std::path::Path, text: &str) -> Result<(), std::io::Err
     Ok(())
 }
 
-fn test_socket() {
-    // 1. Build and connect the client (connects to baseurl/test)
-    let socket = ClientBuilder::new("http://localhost:8081")
-        .namespace("/test")
-        .on("message back", |payload: Payload, _| {
-            println!("Received: {:?}", payload);
-        })
-        .connect()
-        .expect("Connection failed");
-
-    // 2. Emit "message" event with "hello"
-    socket.emit("message", "hello").expect("Emit failed");
-
-    // 3. Keep the thread alive for a moment to receive the callback response
-    std::thread::sleep(Duration::from_secs(2));
+async fn test_socket() {
+    ()
 }

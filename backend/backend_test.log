@@ -1,0 +1,96 @@
+warning: unused import: `xml::ser::to_string`
+ --> src/main.rs:5:24
+  |
+5 | use minio_rsc::{Minio, xml::ser::to_string};
+  |                        ^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `uuid::Uuid`
+  --> src/auth.rs:13:5
+   |
+13 | use uuid::Uuid;
+   |     ^^^^^^^^^^
+
+warning: unused import: `note::*`
+ --> src/models/mod.rs:8:9
+  |
+8 | pub use note::*;
+  |         ^^^^^^^
+
+warning: unused import: `Serialize`
+ --> src/models/mis.rs:1:26
+  |
+1 | use serde::{Deserialize, Serialize};
+  |                          ^^^^^^^^^
+
+warning: unused imports: `Request` and `request`
+  --> src/main.rs:16:28
+   |
+16 |     extract::{self, Query, Request},
+   |                            ^^^^^^^
+...
+20 |         request,
+   |         ^^^^^^^
+
+warning: unused variable: `auth_user`
+   --> src/main.rs:239:15
+    |
+239 |     Extension(auth_user): Extension<AuthUser>,
+    |               ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_auth_user`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `query`
+   --> src/main.rs:434:9
+    |
+434 |     let query =
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_query`
+
+warning: unused variable: `auth_user`
+   --> src/main.rs:704:15
+    |
+704 |     Extension(auth_user): Extension<AuthUser>,
+    |               ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_auth_user`
+
+warning: function `post_chat` is never used
+   --> src/main.rs:662:10
+    |
+662 | async fn post_chat(
+    |          ^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `get_user_id_username` is never used
+   --> src/main.rs:724:10
+    |
+724 | async fn get_user_id_username(
+    |          ^^^^^^^^^^^^^^^^^^^^
+
+warning: struct `Chat` is never constructed
+ --> src/models/chat.rs:2:12
+  |
+2 | pub struct Chat {
+  |            ^^^^
+
+warning: struct `Note` is never constructed
+ --> src/models/note.rs:2:12
+  |
+2 | pub struct Note {
+  |            ^^^^
+
+warning: struct `CreateChatRequest` is never constructed
+  --> src/models/mis.rs:16:12
+   |
+16 | pub struct CreateChatRequest {
+   |            ^^^^^^^^^^^^^^^^^
+
+warning: `bens_chat2` (bin "bens_chat2") generated 13 warnings (run `cargo fix --bin "bens_chat2" -p bens_chat2` to apply 8 suggestions)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.27s
+warning: the following packages contain code that will be rejected by a future version of Rust: sqlx-postgres v0.7.4
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 2`
+     Running `target/debug/bens_chat2`
+Migration 1 already applied, skipping validation.
+Migration 2 already applied, skipping validation.
+Migration 3 already applied, skipping validation.
+All migrations processed successfully!

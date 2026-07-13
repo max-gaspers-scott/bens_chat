@@ -28,7 +28,7 @@ enum Stats {
 }
 
 #[derive(Debug)]
-enum Acction {
+enum Action {
     Logout,
     Login,
     GotoChats,
@@ -50,8 +50,8 @@ struct LoginPayload {
 
 #[derive(Debug, serde::Deserialize)]
 enum LoginInfo {
-    Logedin { info: LoginPayload },
-    NotLogedin,
+    Loggedin { info: LoginPayload },
+    NotLoggedin,
 }
 
 struct Window {
@@ -62,47 +62,42 @@ impl Window {
     fn new() -> Window {
         Window {
             state: Stats::Login,
-            login: LoginInfo::NotLogedin,
+            login: LoginInfo::NotLoggedin,
         }
     }
-    fn transition(&mut self, acction: Acction) {
-        match (&self.state, acction) {
-            (Stats::Login, Acction::Login) => self.state = Stats::Chats,
-            (Stats::Chats, Acction::GotoConversation { chat_id }) => {
+    fn transition(&mut self, Action: Action) {
+        match (&self.state, Action) {
+            (Stats::Login, Action::Login) => self.state = Stats::Chats,
+            (Stats::Chats, Action::GotoConversation { chat_id }) => {
                 self.state = Stats::Conversation { chat_id }
             }
-            (Stats::Conversation { chat_id: _ }, Acction::GotoConversation { chat_id }) => {
+            (Stats::Conversation { chat_id: _ }, Action::GotoConversation { chat_id }) => {
                 self.state = Stats::Conversation { chat_id }
             }
 
-            (Stats::Chats, Acction::MakeChat) => self.state = Stats::NewChat,
-            (Stats::Conversation { chat_id }, Acction::GotoChats) => self.state = Stats::Chats,
-            (Stats::NewChat, Acction::MakeChat) => self.state = Stats::Chats,
-            (_, Acction::Logout) => self.state = Stats::Login,
+            (Stats::Chats, Action::MakeChat) => self.state = Stats::NewChat,
+            (Stats::Conversation { chat_id }, Action::GotoChats) => self.state = Stats::Chats,
+            (Stats::NewChat, Action::MakeChat) => self.state = Stats::Chats,
+            (_, Action::Logout) => self.state = Stats::Login,
             _ => self.state = Stats::Login,
         };
     }
     async fn run(&mut self) {
         loop {
-            // Match the state, execute the logic, and get the resulting action
             let action = match &self.state {
                 Stats::Login => self.handel_login().await,
                 Stats::Chats => self.handel_chats().await,
                 Stats::NewChat => self.handel_make_chat().await,
                 Stats::Conversation { chat_id } => self.handel_conversation(*chat_id).await,
             };
-
-            println!("acction: {:?}", action);
-
-            // Transition the state based on what happened in the screen
             self.transition(action);
         }
     }
-    async fn handel_make_chat(&mut self) -> Acction {
+    async fn handel_make_chat(&mut self) -> Action {
         let login_stuff = match &self.login {
-            LoginInfo::Logedin { info } => Some(info),
-            LoginInfo::NotLogedin => {
-                println!("not loged in");
+            LoginInfo::Loggedin { info } => Some(info),
+            LoginInfo::NotLoggedin => {
+                println!("not logged in");
                 None
             }
         }
@@ -142,28 +137,28 @@ impl Window {
 
         if title == "/exit" {
             print!("{}[2J{}[1;1H", 27 as char, 27 as char);
-            return Acction::GotoChats;
+            return Action::GotoChats;
         }
-        Acction::MakeChat
+        Action::MakeChat
     }
-    async fn handel_login(&mut self) -> Acction {
-        self.login = LoginInfo::Logedin {
+    async fn handel_login(&mut self) -> Action {
+        self.login = LoginInfo::Loggedin {
             info: user_login().await.unwrap(),
         };
 
         let uid = match &self.login {
-            LoginInfo::Logedin { info } => &info.username,
-            LoginInfo::NotLogedin => &String::from("no user id"),
+            LoginInfo::Loggedin { info } => &info.username,
+            LoginInfo::NotLoggedin => &String::from("no user id"),
         };
         println!("{uid}");
 
-        Acction::Login
+        Action::Login
     }
-    async fn handel_chats(&mut self) -> Acction {
+    async fn handel_chats(&mut self) -> Action {
         let login = match &self.login {
-            LoginInfo::Logedin { info } => info,
-            LoginInfo::NotLogedin => panic!(), //should never git to this point without login info
-                                               //because we have to go thought login to get here
+            LoginInfo::Loggedin { info } => info,
+            LoginInfo::NotLoggedin => panic!(), //should never git to this point without login info
+                                                //because we have to go thought login to get here
         };
         let chats_raw = get_chats(login);
         let chats = match chats_raw.await {
@@ -192,21 +187,22 @@ impl Window {
         std::io::stdin().read_line(&mut buff).unwrap();
         let input = buff.trim();
         if input == "n" {
-            return Acction::MakeChat;
+            return Action::MakeChat;
         }
 
         println!("your input: {input}");
         let selected_id = hashmap.get(input).unwrap();
 
-        Acction::GotoConversation {
+        Action::GotoConversation {
             chat_id: *selected_id,
         }
     }
-    async fn handel_conversation(&mut self, chat_id: Uuid) -> Acction {
+    async fn handel_conversation(&mut self, chat_id: Uuid) -> Action {
+        println!("5");
         let login_stuff = match &self.login {
-            LoginInfo::Logedin { info } => Some(info),
-            LoginInfo::NotLogedin => {
-                println!("not loged in");
+            LoginInfo::Loggedin { info } => Some(info),
+            LoginInfo::NotLoggedin => {
+                println!("not logged in");
                 None
             }
         }
@@ -232,13 +228,14 @@ impl Window {
                 continue;
             }
             if message.trim() == "test" {
+                println!("6");
                 test_socket().await;
                 continue;
             }
             if message.trim() == "/exit" {
                 print!("{}[2J{}[1;1H", 27 as char, 27 as char);
 
-                return Acction::GotoChats;
+                return Action::GotoChats;
             }
             if message.trim() == "/subchat" {
                 let mut buff = String::new();
@@ -246,7 +243,7 @@ impl Window {
 
                 std::io::stdin().read_line(&mut buff).unwrap();
                 let input = buff.trim();
-                return Acction::GotoConversation {
+                return Action::GotoConversation {
                     chat_id: Uuid::parse_str(input).unwrap(),
                 };
             }
@@ -393,9 +390,13 @@ async fn get_and_show_msg(login_stuff: &LoginPayload, chat_id: &Uuid) {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let callback = |payload: Payload, socket: wsClient| {
+        println!("inside callback");
         async move {
+            print!("inside move");
             match payload {
-                Payload::Text(values) => println!("Received: {:#?}", values),
+                Payload::Text(values) => {
+                    println!("Received: {:#?}", values)
+                }
                 Payload::Binary(bin_data) => println!("Received bytes: {:#?}", bin_data),
                 // This variant is deprecated, use Payload::Text instead
                 Payload::String(str) => println!("Received: {}", str),
@@ -407,23 +408,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         .boxed()
     };
+
     let mut socket = ClientBuilder::new(BASE_URL)
-        .namespace("/test")
-        .on("test", callback)
+        .namespace("/")
+        .on("message back", callback)
         .on("error", |err, _| {
             async move { eprintln!("Error: {:#?}", err) }.boxed()
         })
         .connect()
         .await
         .expect("Connection failed");
+    println!("connection make");
+
     let json_payload = serde_json::json!({"token": 123});
     socket
-        .emit("foo", json_payload)
+        .emit("message", json_payload)
         .await
         .expect("Server unreachable");
 
-    let mut app = Window::new();
-    app.run().await;
+    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+    // let mut app = Window::new();
+
+    // app.run().await;
     Ok(())
 }
 
@@ -462,7 +468,7 @@ async fn user_login() -> Result<LoginPayload, reqwest::Error> {
     let res = client.post(url).json(&payload).send().await?;
 
     //TODO: data may come back as {error: "messages"}
-    //wich can not be turned into a LoginPayload, and will error.
+    //whitch can not be turned into a LoginPayload, and will error.
 
     let data: LoginResponse = match res.json().await {
         Ok(res) => res,
@@ -473,7 +479,7 @@ async fn user_login() -> Result<LoginPayload, reqwest::Error> {
     let path = std::path::Path::new("./token.txt");
     match write_file(path, &user_info.token) {
         Ok(_) => {}
-        Err(e) => println!("write fiel error: {}", e),
+        Err(e) => println!("write failed error: {}", e),
     }
 
     print!("{}[2J{}[1;1H", 27 as char, 27 as char);
@@ -488,5 +494,6 @@ pub fn write_file(path: &std::path::Path, text: &str) -> Result<(), std::io::Err
 }
 
 async fn test_socket() {
+    println!("testing ");
     ()
 }

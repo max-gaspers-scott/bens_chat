@@ -1,9 +1,11 @@
 use reqwest::{self, Client};
+use rust_socketio::{ClientBuilder, Payload};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::fs::OpenOptions;
 use std::future::Future;
 use std::io::Write;
+use std::time::Duration;
 use termimad::print_text;
 use uuid::Uuid;
 
@@ -222,6 +224,10 @@ impl Window {
 
             if message.trim() == "/update" {
                 get_and_show_msg(&login_stuff, &chat_id).await;
+                continue;
+            }
+            if message.trim() == "test" {
+                test_socket().await;
                 continue;
             }
             if message.trim() == "/exit" {
@@ -444,4 +450,21 @@ pub fn write_file(path: &std::path::Path, text: &str) -> Result<(), std::io::Err
     file.write_all(text.as_bytes())?;
     file.flush()?;
     Ok(())
+}
+
+fn test_socket() {
+    // 1. Build and connect the client (connects to baseurl/test)
+    let socket = ClientBuilder::new("http://localhost:8081")
+        .namespace("/test")
+        .on("message back", |payload: Payload, _| {
+            println!("Received: {:?}", payload);
+        })
+        .connect()
+        .expect("Connection failed");
+
+    // 2. Emit "message" event with "hello"
+    socket.emit("message", "hello").expect("Emit failed");
+
+    // 3. Keep the thread alive for a moment to receive the callback response
+    std::thread::sleep(Duration::from_secs(2));
 }

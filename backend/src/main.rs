@@ -26,6 +26,10 @@ use axum::{
 use bcrypt::{DEFAULT_COST, hash, verify};
 use core::str;
 use serde_json::{Value, json};
+use socketioxide::{
+    SocketIo,
+    extract::{Data, SocketRef},
+};
 use sqlx::{PgPool, postgres::PgPoolOptions};
 use std::{env, result::Result};
 use tower::service_fn;
@@ -35,41 +39,6 @@ use tower_http::{
 };
 use uuid::Uuid;
 
-#[derive(Debug, Deserialize)]
-struct FetchUrlQuery {
-    object_key: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct LoginRequest {
-    username: String,
-    password: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct CreateChatRequest {
-    chat_name: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-struct NewPass {
-    new_password: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct UsernameQuery {
-    username: String,
-}
-#[derive(Debug, Deserialize)]
-struct ParentQuery {
-    parent: uuid::Uuid,
-}
-
-#[derive(Debug, Deserialize)]
-struct UploadUrlQuery {
-    chat_id: Uuid,
-    file_extension: String,
-}
 async fn health() -> String {
     "healthy".to_string()
 }
@@ -111,6 +80,12 @@ fn build_cors_layer() -> CorsLayer {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenv::dotenv().ok();
+    let (layer, io) = SocketIo::new_layer();
+    io.ns("/test", |s: SocketRef| {
+        s.on("message", |s: SocketRef| {
+            s.emit("message back", "hello to the frontend").ok();
+        })
+    });
 
     let db_url = env::var("DATABASE_URL")
         .unwrap_or_else(|_| "postgres://dbuser:p@localhost:1111/data".to_string());
@@ -216,8 +191,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let public_routes = Router::new()
         .route("/health", get(health))
         .route("/users", post(post_user))
+        .route("/test", get(|| async { "hi fe" }))
         .route("/auth/login", post(login_user));
+
     // .route("/debug-headers", get(debug_headers));
+
+    let (socket_layer, io) = SocketIo::new_layer();
+
+    io.ns("/", |socket: SocketRef| {
+        socket.on("join", |socket: SocketRef, Data::<String>(room)| {
+            socket.join(room).ok();
+        });
+    });
 
     let protected_routes = Router::new()
         .route(
@@ -242,6 +227,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .merge(protected_routes)
         .fallback_service(static_service)
         .layer(build_cors_layer())
+        .layer(socket_layer)
+        .layer(Extension(io))
         .with_state(pool);
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:8081").await.unwrap();
@@ -404,6 +391,7 @@ async fn get_message_id_sender_name_content_parent(
 async fn post_message(
     Extension(auth_user): Extension<AuthUser>,
     extract::State(pool): extract::State<PgPool>,
+    Extension(io): Extension<SocketIo>,
     Json(payload): Json<Message>,
 ) -> Json<Value> {
     let text = &payload
@@ -436,7 +424,11 @@ async fn post_message(
 
         let post_gemini_res = q.fetch_one(&pool).await;
         match post_gemini_res {
-            Ok(value) => (),
+            Ok(value) => {
+                if let Some(parent) = payload.parent {
+                    let _ = io.to(parent.to_string()).emit("update", &value);
+                }
+            }
             Err(e) => println!("error happend trying to post gemini responce: {e}"),
         }
     }
@@ -462,7 +454,10 @@ async fn post_message(
         let result = q.fetch_one(&pool).await;
 
         match result {
-            Ok(value) => Json(json!({"res": "success", "data": value})),
+            Ok(value) => {
+                let _ = io.to(parent.to_string()).emit("update", &value);
+                Json(json!({"res": "success", "data": value}))
+            }
             Err(e) => Json(json!({"res": format!("error: {}", e)})),
         }
     } else {
@@ -506,6 +501,8 @@ async fn post_message(
         if let Err(e) = tx.commit().await {
             return Json(json!({"res": format!("error: {}", e)}));
         }
+
+        let _ = io.to(chat_id.to_string()).emit("update", &message);
 
         Json(json!({"res": "success", "data": message}))
     }

@@ -1,12 +1,13 @@
 use image::{DynamicImage, Pixel, Rgba, RgbaImage};
-use reqwest::{self, Client};
+use reqwest::{self, Client, Request};
 use serde::Deserialize;
+use serde_json::json;
 use std::collections::HashMap;
 use std::fs::OpenOptions;
 use std::future::Future;
 use std::io::Write;
 use std::time::Duration;
-use termimad::print_text;
+use termimad::{print_inline, print_text};
 use uuid::Uuid;
 use viuer::print;
 
@@ -281,19 +282,56 @@ struct SendibleContent {
     content: serde_json::Value,
 }
 
+#[derive(serde::Deserialize)]
+struct Img {
+    url: String,
+}
 impl SendibleContent {
     fn show(&self) {
         let raw = self.content["text"].to_string();
         let fixed_input = raw.replace("\\n", "\n").replace("\\", "");
+        print!("text: ");
         print_text(&fixed_input);
-
+    }
+    async fn show_img(&self, login: &LoginPayload, id: &Uuid) {
+        println!("call to show_img");
         if !self.content["url"].is_null() {
             let file = self.content["url"].to_string();
             let conf = viuer::Config {
                 ..Default::default()
             };
             // viuer::print_from_file("./moninoki.jpg", &conf).expect("Image printing failed.");
-            println!("{file}")
+            // /minio-fetch
+            let url = format!("{BASE_URL}/minio-fetch?object_key=media/{}/{}", id, file);
+
+            println!("the file/url string is: {url}");
+
+            let client = Client::new();
+
+            let res = client
+                .get(url)
+                .bearer_auth(login.token.clone())
+                .send()
+                .await
+                .unwrap();
+
+            // let res = match res {
+            //     Ok(v) => v.json().await,
+            //     Err(e) => {
+            //         println!("error getting minio url: {e}");
+            //         panic!()
+            //     }
+            // }
+            // .unwrap();
+            println!("about to show res");
+            // println!("{}", res);
+            let res: Img = res.json().await.map_err(|e| println!("{e}")).unwrap();
+            //TODO: download the img to disk to dispaly
+            // maybe can you Request
+            // or see if there is an media screaming crate
+            //
+
+            // viuer::print_from_file(res.url, &conf).expect("Image printing failed.");
         }
     }
 }
@@ -306,9 +344,11 @@ struct SendMesage {
 }
 
 impl Message {
-    fn show(&self) {
-        println!("id:{}\n{}: ", self.sender_name, self.message_id,);
+    async fn show(&self, login: &LoginPayload, id: &Uuid) {
+        println!("name: {}\nid: {}: ", self.sender_name, self.message_id,);
+        println!("raw: {:?}\n\n", self.content);
         self.content.show();
+        self.content.show_img(login, id).await;
     }
 }
 
@@ -386,17 +426,23 @@ async fn send_message(login: &LoginPayload, message: &SendMesage) -> Result<(), 
     Ok(())
 }
 
-async fn show_messages(messages: &[Message]) -> Result<(), reqwest::Error> {
+async fn show_messages(
+    messages: &[Message],
+    login: &LoginPayload,
+    id: &Uuid,
+) -> Result<(), reqwest::Error> {
     print!("{}[2J{}[1;1H", 27 as char, 27 as char);
     for m in messages {
-        m.show();
+        m.show(login, id).await;
     }
     Ok(())
 }
 
 async fn get_and_show_msg(login_stuff: &LoginPayload, chat_id: &Uuid) {
     let messages = get_messages(&login_stuff, &chat_id).await.unwrap();
-    show_messages(&messages).await.unwrap();
+    show_messages(&messages, login_stuff, chat_id)
+        .await
+        .unwrap();
 }
 
 #[tokio::main]

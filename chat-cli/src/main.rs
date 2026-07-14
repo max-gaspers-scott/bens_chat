@@ -173,9 +173,13 @@ impl Window {
                 c.content.content["title"], c.content.content["text"]
             );
 
-            let chat_name = c.content.content["title"]
-                .as_str()
-                .unwrap_or("title was not found");
+            let chat_name = if c.content.content["title"].is_null() {
+                c.content.content["text"].as_str().unwrap()
+            } else {
+                c.content.content["title"]
+                    .as_str()
+                    .unwrap_or("title was not found")
+            };
 
             hashmap.insert(chat_name.to_string(), c.message_id);
         }

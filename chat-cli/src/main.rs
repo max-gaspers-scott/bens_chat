@@ -1,5 +1,5 @@
+use image::{DynamicImage, Pixel, Rgba, RgbaImage};
 use reqwest::{self, Client};
-
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::fs::OpenOptions;
@@ -8,6 +8,7 @@ use std::io::Write;
 use std::time::Duration;
 use termimad::print_text;
 use uuid::Uuid;
+use viuer::print;
 
 // should be in env, but this will work for now
 // const PORT: u32 = 8081;
@@ -167,7 +168,10 @@ impl Window {
         let mut hashmap = HashMap::new();
 
         for c in chats {
-            println!("chat: {}", c.content.content["title"]);
+            println!(
+                "chat: {},{}",
+                c.content.content["title"], c.content.content["text"]
+            );
 
             let chat_name = c.content.content["title"]
                 .as_str()
@@ -278,6 +282,15 @@ impl SendibleContent {
         let raw = self.content["text"].to_string();
         let fixed_input = raw.replace("\\n", "\n").replace("\\", "");
         print_text(&fixed_input);
+
+        if !self.content["url"].is_null() {
+            let file = self.content["url"].to_string();
+            let conf = viuer::Config {
+                ..Default::default()
+            };
+            // viuer::print_from_file("./moninoki.jpg", &conf).expect("Image printing failed.");
+            println!("{file}")
+        }
     }
 }
 

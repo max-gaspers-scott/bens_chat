@@ -1,10 +1,5 @@
 use reqwest::{self, Client};
 
-use futures_util::FutureExt;
-use rust_socketio::{
-    Payload,
-    asynchronous::{Client as wsClient, ClientBuilder},
-};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::fs::OpenOptions;
@@ -389,47 +384,9 @@ async fn get_and_show_msg(login_stuff: &LoginPayload, chat_id: &Uuid) {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let callback = |payload: Payload, socket: wsClient| {
-        println!("inside callback");
-        async move {
-            print!("inside move");
-            match payload {
-                Payload::Text(values) => {
-                    println!("Received: {:#?}", values)
-                }
-                Payload::Binary(bin_data) => println!("Received bytes: {:#?}", bin_data),
-                // This variant is deprecated, use Payload::Text instead
-                Payload::String(str) => println!("Received: {}", str),
-            }
-            socket
-                .emit("test", serde_json::json!({"got ack": true}))
-                .await
-                .expect("Server unreachable")
-        }
-        .boxed()
-    };
+    let mut app = Window::new();
 
-    let mut socket = ClientBuilder::new(BASE_URL)
-        .namespace("/")
-        .on("message back", callback)
-        .on("error", |err, _| {
-            async move { eprintln!("Error: {:#?}", err) }.boxed()
-        })
-        .connect()
-        .await
-        .expect("Connection failed");
-    println!("connection make");
-
-    let json_payload = serde_json::json!({"token": 123});
-    socket
-        .emit("message", json_payload)
-        .await
-        .expect("Server unreachable");
-
-    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-    // let mut app = Window::new();
-
-    // app.run().await;
+    app.run().await;
     Ok(())
 }
 

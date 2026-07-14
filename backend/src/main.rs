@@ -79,10 +79,17 @@ fn build_cors_layer() -> CorsLayer {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    println!("backend starting");
     dotenv::dotenv().ok();
-    let (layer, io) = SocketIo::new_layer();
-    io.ns("/test", |s: SocketRef| {
-        s.on("message", |s: SocketRef| {
+    let (socket_layer, io) = SocketIo::new_layer();
+
+    io.ns("/", |s: SocketRef| {
+        println!("New socket connected: {:?}", s.id);
+        s.on("join", |socket: SocketRef, Data::<String>(room)| {
+            socket.join(room).ok();
+        });
+        s.on("message", |s: SocketRef, Data(data): Data<serde_json::Value>| {
+            println!("message received from FE: {:?}", data);
             s.emit("message back", "hello to the frontend").ok();
         })
     });
@@ -196,14 +203,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // .route("/debug-headers", get(debug_headers));
 
-    let (socket_layer, io) = SocketIo::new_layer();
-
-    io.ns("/", |socket: SocketRef| {
-        socket.on("join", |socket: SocketRef, Data::<String>(room)| {
-            socket.join(room).ok();
-        });
-    });
-
     let protected_routes = Router::new()
         .route(
             "/user-chats",
@@ -225,10 +224,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = Router::new()
         .merge(public_routes)
         .merge(protected_routes)
-        .fallback_service(static_service)
-        .layer(build_cors_layer())
-        .layer(socket_layer)
-        .layer(Extension(io))
+        .fallback_service(static_service) // 1. Register fallback first
+        .layer(socket_layer) // 2. Wrap everything with the socket layer
+        .layer(Extension(io)) // 3. Provide the SocketIo instance to request extensions
+        .layer(build_cors_layer()) // 4. Wrap with CORS as the outermost layer
         .with_state(pool);
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:8081").await.unwrap();

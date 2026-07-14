@@ -13,5 +13,8 @@ uuid = { version = "1.23.1", features = ["serde", "v4"] }
 tokio = { version = "1", features = ["full", "time"] }
 clap = { version = "4.5.56", features = ["derive"] }
 
-chrono = { version = "0.4", features = ["serde"] } # For Utc
-termimad = "0.31"                                  # Use the latest version available
+rust_socketio = { version = "0.6.0", features = ["async"] }
+chrono = { version = "0.4", features = ["serde"] }          # For Utc
+
+termimad = "0.31" # Use the latest version available
+futures-util = "0.3.32"

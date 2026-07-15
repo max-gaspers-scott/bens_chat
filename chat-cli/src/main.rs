@@ -299,14 +299,13 @@ impl SendibleContent {
     }
     async fn show_img(&self, login: &LoginPayload, id: &Uuid) {
         println!("call to show_img");
-        if !self.content["url"].is_null() {
-            let file = self.content["url"].to_string();
+        if let Some(file) = self.content["url"].as_str() {
             let conf = viuer::Config {
                 ..Default::default()
             };
             // viuer::print_from_file("./moninoki.jpg", &conf).expect("Image printing failed.");
             // /minio-fetch
-            let url = format!("{BASE_URL}/minio-fetch?object_key=media/{}/{}", id, file);
+            let url = format!("{BASE_URL}/minio-fetch?object_key={}", file);
 
             println!("the file/url string is: {url}");
 

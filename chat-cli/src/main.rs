@@ -1,5 +1,6 @@
 use futures_util::StreamExt;
 use image::{DynamicImage, Pixel, Rgba, RgbaImage};
+use rand::RngExt;
 use reqwest::Response;
 use reqwest::{self, Client, Request};
 use serde::Deserialize;
@@ -298,7 +299,6 @@ impl SendibleContent {
         print_text(&fixed_input);
     }
     async fn show_img(&self, login: &LoginPayload, id: &Uuid) {
-        println!("call to show_img");
         if let Some(file) = self.content["url"].as_str() {
             let conf = viuer::Config {
                 ..Default::default()
@@ -306,8 +306,6 @@ impl SendibleContent {
             // viuer::print_from_file("./moninoki.jpg", &conf).expect("Image printing failed.");
             // /minio-fetch
             let url = format!("{BASE_URL}/minio-fetch?object_key={}", file);
-
-            println!("the file/url string is: {url}");
 
             let client = Client::new();
 
@@ -326,13 +324,12 @@ impl SendibleContent {
             //     }
             // }
             // .unwrap();
-            println!("about to show res");
-            // println!("{}", res);
             let res: Img = res.json().await.map_err(|e| println!("{e}")).unwrap();
 
             let presigned_url = res.url;
             // The path where you want to save the downloaded file
-            let output_filepath = "downloaded_image.png";
+            let rand_id = rand::rng().random_range(1000..=9999);
+            let output_filepath = format!("downloaded_image_{}.png", rand_id);
 
             let client = reqwest::Client::new();
 
@@ -357,7 +354,7 @@ impl SendibleContent {
             let mut file = OpenOptions::new()
                 .create(true)
                 .write(true)
-                .open(output_filepath)
+                .open(&output_filepath)
                 .unwrap();
 
             // let mut file = File::create(presigned_url).unwrap();
@@ -378,12 +375,14 @@ impl SendibleContent {
 
             // Ensure all data is written to disk
             file.flush().unwrap();
-
-            println!(
-                "
-Successfully downloaded {} bytes to {}",
-                downloaded_bytes, output_filepath
-            );
+            let conf = viuer::Config {
+                y: 1,
+                x: 1,
+                restore_cursor: true,
+                ..Default::default()
+            };
+            println!("img: ");
+            viuer::print_from_file(output_filepath, &conf).expect("Image printing failed.");
 
             //TODO: download the img to disk to dispaly
             // maybe can you Request
@@ -408,7 +407,6 @@ impl Message {
     //use DI
     async fn show(&self, login: &LoginPayload, id: &Uuid) {
         println!("name: {}\nid: {}: ", self.sender_name, self.message_id,);
-        println!("raw: {:?}\n\n", self.content);
         self.content.show();
         self.content.show_img(login, id).await;
     }

@@ -1,8 +1,11 @@
+use futures_util::StreamExt;
 use image::{DynamicImage, Pixel, Rgba, RgbaImage};
+use reqwest::Response;
 use reqwest::{self, Client, Request};
 use serde::Deserialize;
 use serde_json::json;
 use std::collections::HashMap;
+use std::fs::File;
 use std::fs::OpenOptions;
 use std::future::Future;
 use std::io::Write;
@@ -327,6 +330,62 @@ impl SendibleContent {
             println!("about to show res");
             // println!("{}", res);
             let res: Img = res.json().await.map_err(|e| println!("{e}")).unwrap();
+
+            let presigned_url = res.url;
+            // The path where you want to save the downloaded file
+            let output_filepath = "downloaded_image.png";
+
+            let client = reqwest::Client::new();
+
+            // 3. Make the GET request
+            let response = client.get(&presigned_url).send().await.unwrap();
+
+            // 4. Check if the request was successful (status code 2xx)
+            // if !response.status().is_success() {
+            //     let status = response.status();
+            //     let body = response
+            //         .text()
+            //         .await
+            //         .unwrap_or_else(|_| "Failed to read response body".to_string());
+            //     return Err(format!(
+            //         "Failed to download image. Status: {}. Body: {}",
+            //         status, body
+            //     )
+            //     .into())
+            //     .unwrap();
+            // }
+            //
+            let mut file = OpenOptions::new()
+                .create(true)
+                .write(true)
+                .open(output_filepath)
+                .unwrap();
+
+            // let mut file = File::create(presigned_url).unwrap();
+
+            // 6. Stream the response body and write it to the file
+            let mut stream = response.bytes_stream();
+            let mut downloaded_bytes = 0;
+
+            while let Some(chunk_result) = stream.next().await {
+                let chunk = chunk_result.unwrap(); // Handle potential errors in receiving a chunk
+                //
+                file.write_all(&chunk).unwrap(); // Write the chunk to the file
+                downloaded_bytes += chunk.len();
+                // Optional: Print progress for large files
+                // print!("rDownloaded: {} bytes", downloaded_bytes);
+                // io::stdout().flush()?;
+            }
+
+            // Ensure all data is written to disk
+            file.flush().unwrap();
+
+            println!(
+                "
+Successfully downloaded {} bytes to {}",
+                downloaded_bytes, output_filepath
+            );
+
             //TODO: download the img to disk to dispaly
             // maybe can you Request
             // or see if there is an media screaming crate

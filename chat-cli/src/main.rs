@@ -231,6 +231,7 @@ impl Window {
                 get_and_show_msg(&login_stuff, &chat_id).await;
                 continue;
             }
+
             if message.trim() == "test" {
                 println!("6");
                 test_socket().await;
@@ -344,6 +345,9 @@ struct SendMesage {
 }
 
 impl Message {
+    //TODO: show shouldent need all this params just in case it has an image. the caller shouldent have to cair
+    //about waht is being shown, just that .show can be called.
+    //use DI
     async fn show(&self, login: &LoginPayload, id: &Uuid) {
         println!("name: {}\nid: {}: ", self.sender_name, self.message_id,);
         println!("raw: {:?}\n\n", self.content);
@@ -447,6 +451,10 @@ async fn get_and_show_msg(login_stuff: &LoginPayload, chat_id: &Uuid) {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let conf = viuer::Config {
+        ..Default::default()
+    };
+    viuer::print_from_file("./moninoki.jpg", &conf).expect("Image printing failed.");
     let mut app = Window::new();
 
     app.run().await;

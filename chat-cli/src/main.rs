@@ -376,9 +376,7 @@ impl SendibleContent {
             // Ensure all data is written to disk
             file.flush().unwrap();
             let conf = viuer::Config {
-                y: 1,
-                x: 1,
-                restore_cursor: true,
+                absolute_offset: false,
                 ..Default::default()
             };
             println!("img: ");
@@ -507,10 +505,6 @@ async fn get_and_show_msg(login_stuff: &LoginPayload, chat_id: &Uuid) {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let conf = viuer::Config {
-        ..Default::default()
-    };
-    viuer::print_from_file("./moninoki.jpg", &conf).expect("Image printing failed.");
     let mut app = Window::new();
 
     app.run().await;

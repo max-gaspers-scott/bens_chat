@@ -301,10 +301,9 @@ impl SendibleContent {
     async fn show_img(&self, login: &LoginPayload, id: &Uuid) {
         if let Some(file) = self.content["url"].as_str() {
             let conf = viuer::Config {
+                absolute_offset: false,
                 ..Default::default()
             };
-            // viuer::print_from_file("./moninoki.jpg", &conf).expect("Image printing failed.");
-            // /minio-fetch
             let url = format!("{BASE_URL}/minio-fetch?object_key={}", file);
 
             let client = Client::new();
@@ -315,15 +314,6 @@ impl SendibleContent {
                 .send()
                 .await
                 .unwrap();
-
-            // let res = match res {
-            //     Ok(v) => v.json().await,
-            //     Err(e) => {
-            //         println!("error getting minio url: {e}");
-            //         panic!()
-            //     }
-            // }
-            // .unwrap();
             let res: Img = res.json().await.map_err(|e| println!("{e}")).unwrap();
 
             let presigned_url = res.url;
@@ -336,21 +326,6 @@ impl SendibleContent {
             // 3. Make the GET request
             let response = client.get(&presigned_url).send().await.unwrap();
 
-            // 4. Check if the request was successful (status code 2xx)
-            // if !response.status().is_success() {
-            //     let status = response.status();
-            //     let body = response
-            //         .text()
-            //         .await
-            //         .unwrap_or_else(|_| "Failed to read response body".to_string());
-            //     return Err(format!(
-            //         "Failed to download image. Status: {}. Body: {}",
-            //         status, body
-            //     )
-            //     .into())
-            //     .unwrap();
-            // }
-            //
             let mut file = OpenOptions::new()
                 .create(true)
                 .write(true)
@@ -386,8 +361,6 @@ impl SendibleContent {
             // maybe can you Request
             // or see if there is an media screaming crate
             //
-
-            // viuer::print_from_file(res.url, &conf).expect("Image printing failed.");
         }
     }
 }

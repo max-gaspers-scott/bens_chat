@@ -79,9 +79,12 @@ function App() {
     };
   }, [handleLogout]);
 
-  const handleChatCreated = () => {
+  const handleChatCreated = (newChatId) => {
     // Trigger chat list refresh
     window.dispatchEvent(new CustomEvent('refreshChats'));
+    if (newChatId) {
+      setSelectedChatId(newChatId);
+    }
   };
 
   const handleSelectChat = (chatId) => {
@@ -140,7 +143,11 @@ function App() {
               />
             </aside>
             <section className="chat-main">
-              <ChatView chatId={selectedChatId} currentUser={currentUser} />
+              <ChatView
+                chatId={selectedChatId}
+                currentUser={currentUser}
+                onSelectChat={handleSelectChat}
+              />
             </section>
           </div>
         )}

@@ -740,3 +740,82 @@ body {
   background-color: rgba(255, 255, 255, 0.1);
   border-color: white;
 }
+
+/* Quick 1-on-1 Chat Form styles */
+.quick-chat-container {
+  margin-top: 40px;
+  padding: 25px;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  width: 100%;
+  max-width: 450px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
+}
+
+.quick-chat-container h4 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 15px;
+  color: var(--text-primary);
+  text-align: center;
+}
+
+.quick-chat-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.quick-chat-input-group {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+}
+
+.quick-chat-input-group input {
+  flex: 1;
+  padding: 12px 16px;
+  border: 1px solid var(--border-color-light);
+  border-radius: 24px;
+  font-size: 0.95rem;
+  background-color: var(--input-bg);
+  color: var(--text-primary);
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.quick-chat-input-group input:focus {
+  border-color: #3498db;
+  box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.15);
+}
+
+.quick-chat-input-group button {
+  padding: 12px 24px;
+  background-color: #3498db;
+  color: white;
+  border: none;
+  border-radius: 24px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s, transform 0.1s;
+}
+
+.quick-chat-input-group button:hover:not(:disabled) {
+  background-color: #2980b9;
+}
+
+.quick-chat-input-group button:disabled {
+  background-color: #bdc3c7;
+  cursor: not-allowed;
+}
+
+.quick-chat-error {
+  margin-top: 5px;
+  color: #e74c3c;
+  font-size: 0.85rem;
+  text-align: center;
+}
+

@@ -56,7 +56,7 @@ function CreateChat({ currentUser, onChatCreated }) {
       // Success - reset form and notify parent
       setChatName('');
       setParticipants(['']);
-      onChatCreated();
+      onChatCreated(chat_id);
     } catch (err) {
       setError(err.message || 'Failed to create chat');
     } finally {

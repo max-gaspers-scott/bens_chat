@@ -27,7 +27,83 @@ const ChatImage = memo(function ChatImage({ objectKey }) {
   );
 });
 
-function ChatView({ chatId, currentUser }) {
+function StartDirectChatForm({ currentUser, onSelectChat }) {
+  const [username, setUsername] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const otherUsername = username.trim();
+    if (!otherUsername) return;
+
+    if (otherUsername.toLowerCase() === currentUser.username.toLowerCase()) {
+      setError("You cannot create a 1-on-1 chat with yourself.");
+      return;
+    }
+
+    setError('');
+    setLoading(true);
+
+    try {
+      // Auto-generate chat title
+      const chatTitle = `${currentUser.username} & ${otherUsername}`;
+
+      // Create Chat
+      const chatResult = await api.createChat({
+        sender_name: currentUser.username,
+        title: chatTitle,
+      });
+
+      if (chatResult.res !== 'success') {
+        throw new Error('Failed to create chat');
+      }
+      const chat_id = chatResult.data.message_id;
+
+      // Link the other participant
+      const linkResult = await api.linkUserToChat(otherUsername, chat_id);
+      if (linkResult.res !== 'success') {
+        throw new Error(`User "${otherUsername}" not found.`);
+      }
+
+      // Success
+      setUsername('');
+      // Trigger chat list refresh
+      window.dispatchEvent(new CustomEvent('refreshChats'));
+      if (onSelectChat) {
+        onSelectChat(chat_id);
+      }
+    } catch (err) {
+      setError(err.message || 'Failed to start chat');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="quick-chat-container">
+      <h4>Or Start a 1-on-1 Chat</h4>
+      <form onSubmit={handleSubmit} className="quick-chat-form">
+        <div className="quick-chat-input-group">
+          <input
+            type="text"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            placeholder="Enter friend's username"
+            disabled={loading}
+            required
+          />
+          <button type="submit" disabled={loading || !username.trim()}>
+            {loading ? 'Starting...' : 'Start Chat'}
+          </button>
+        </div>
+        {error && <p className="error quick-chat-error">{error}</p>}
+      </form>
+    </div>
+  );
+}
+
+function ChatView({ chatId, currentUser, onSelectChat }) {
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
   // Navigation stack of parents. The first entry is the chat's root message;
@@ -124,6 +200,7 @@ function ChatView({ chatId, currentUser }) {
       <div className="chat-view empty">
         <p>Select a chat to view messages</p>
         <p className="hint">You can create a chat by typing participants' usernames and a chat name above.</p>
+        <StartDirectChatForm currentUser={currentUser} onSelectChat={onSelectChat} />
       </div>
     );
   }

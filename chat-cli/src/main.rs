@@ -5,12 +5,14 @@ use reqwest::Response;
 use reqwest::{self, Client, Request};
 use serde::Deserialize;
 use serde_json::json;
+use std::clone;
 use std::collections::HashMap;
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::future::Future;
 use std::io::Write;
 use std::time::Duration;
+use termimad::minimad::Text;
 use termimad::{print_inline, print_text};
 use uuid::Uuid;
 use viuer::print;
@@ -42,8 +44,7 @@ struct LoginResponse {
     payload: LoginPayload,
     status: String,
 }
-
-#[derive(Deserialize, Debug)]
+#[derive(Clone, Deserialize, Debug)]
 struct LoginPayload {
     token: String,
     username: String,
@@ -175,15 +176,15 @@ impl Window {
         for c in chats {
             println!(
                 "chat: {},{}",
-                c.content.content["title"], c.content.content["text"]
+                c.content.get_content()["title"],
+                c.content.get_content()["text"]
             );
 
-            let chat_name = if c.content.content["title"].is_null() {
-                c.content.content["text"].as_str().unwrap()
+            let content = c.content.get_content();
+            let chat_name = if content["title"].is_null() {
+                content["text"].as_str().unwrap()
             } else {
-                c.content.content["title"]
-                    .as_str()
-                    .unwrap_or("title was not found")
+                content["title"].as_str().unwrap_or("title was not found")
             };
 
             hashmap.insert(chat_name.to_string(), c.message_id);
@@ -206,7 +207,6 @@ impl Window {
         }
     }
     async fn handel_conversation(&mut self, chat_id: Uuid) -> Action {
-        println!("5");
         let login_stuff = match &self.login {
             LoginInfo::Loggedin { info } => Some(info),
             LoginInfo::NotLoggedin => {
@@ -236,11 +236,6 @@ impl Window {
                 continue;
             }
 
-            if message.trim() == "test" {
-                println!("6");
-                test_socket().await;
-                continue;
-            }
             if message.trim() == "/exit" {
                 print!("{}[2J{}[1;1H", 27 as char, 27 as char);
 
@@ -270,6 +265,8 @@ struct MessageResponce {
     status: String,
 }
 
+// #{buffers} get_messages puts the json result into dmessageResponce, wich has an araray of Messages, and a dmessages has a SendibleContent. SendibleContent is an emun of to variants that have json values as there fields. the compiler cant get the json filed into the enum
+
 #[derive(Debug, serde::Deserialize)]
 struct Message {
     #[serde(default)]
@@ -283,73 +280,71 @@ struct Message {
 }
 
 #[derive(Debug, serde::Deserialize)]
-struct SendibleContent {
-    content: serde_json::Value,
+#[serde(untagged)]
+enum SendibleContent {
+    Text(TextMessage),
+    Img(ImgMessage),
+}
+
+impl SendibleContent {
+    async fn show(&self) {
+        match self {
+            Self::Text(t) => {
+                let _ = t.show().await;
+            }
+            Self::Img(i) => {
+                let _ = i.show().await;
+            }
+        }
+    }
+    fn get_content(&self) -> serde_json::Value {
+        match self {
+            Self::Text(t) => t.content.clone(),
+            Self::Img(i) => i.content.clone(),
+        }
+    }
 }
 
 #[derive(serde::Deserialize)]
 struct Img {
     url: String,
 }
-impl SendibleContent {
-    fn show(&self) {
+
+#[derive(Debug, serde::Serialize)]
+struct SendMesage {
+    sender_name: String,
+    parent: Option<uuid::Uuid>,
+    content: serde_json::Value,
+}
+
+trait MessageInterface {
+    async fn show(&self);
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct TextMessage {
+    content: serde_json::Value,
+}
+impl MessageInterface for TextMessage {
+    async fn show(&self) {
         let raw = self.content["text"].to_string();
         let fixed_input = raw.replace("\\n", "\n").replace("\\", "");
         print!("text: ");
         print_text(&fixed_input);
     }
-    async fn show_img(&self, login: &LoginPayload, id: &Uuid) {
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct ImgMessage {
+    content: serde_json::Value,
+}
+impl MessageInterface for ImgMessage {
+    async fn show(&self) {
         if let Some(file) = self.content["url"].as_str() {
-            let conf = viuer::Config {
-                absolute_offset: false,
-                ..Default::default()
-            };
-            let url = format!("{BASE_URL}/minio-fetch?object_key={}", file);
+            let url = &format!("{BASE_URL}/minio-fetch?object_key={}", file);
 
-            let client = Client::new();
+            let output_filepath = download_img_from_db(login.clone(), url).await;
 
-            let res = client
-                .get(url)
-                .bearer_auth(login.token.clone())
-                .send()
-                .await
-                .unwrap();
-            let res: Img = res.json().await.map_err(|e| println!("{e}")).unwrap();
-
-            let presigned_url = res.url;
-            // The path where you want to save the downloaded file
-            let rand_id = rand::rng().random_range(1000..=9999);
-            let output_filepath = format!("downloaded_image_{}.png", rand_id);
-
-            let client = reqwest::Client::new();
-
-            // 3. Make the GET request
-            let response = client.get(&presigned_url).send().await.unwrap();
-
-            let mut file = OpenOptions::new()
-                .create(true)
-                .write(true)
-                .open(&output_filepath)
-                .unwrap();
-
-            // let mut file = File::create(presigned_url).unwrap();
-
-            // 6. Stream the response body and write it to the file
-            let mut stream = response.bytes_stream();
-            let mut downloaded_bytes = 0;
-
-            while let Some(chunk_result) = stream.next().await {
-                let chunk = chunk_result.unwrap(); // Handle potential errors in receiving a chunk
-                //
-                file.write_all(&chunk).unwrap(); // Write the chunk to the file
-                downloaded_bytes += chunk.len();
-                // Optional: Print progress for large files
-                // print!("rDownloaded: {} bytes", downloaded_bytes);
-                // io::stdout().flush()?;
-            }
-
-            // Ensure all data is written to disk
-            file.flush().unwrap();
             let conf = viuer::Config {
                 absolute_offset: false,
                 ..Default::default()
@@ -364,23 +359,47 @@ impl SendibleContent {
         }
     }
 }
+async fn download_img_from_db(login: LoginPayload, url: &str) -> String {
+    let client = Client::new();
 
-#[derive(Debug, serde::Serialize)]
-struct SendMesage {
-    sender_name: String,
-    parent: Option<uuid::Uuid>,
-    content: serde_json::Value,
-}
+    let res = client
+        .get(url)
+        .bearer_auth(login.token.clone())
+        .send()
+        .await
+        .unwrap();
+    let res: Img = res.json().await.map_err(|e| println!("{e}")).unwrap();
 
-impl Message {
-    //TODO: show shouldent need all this params just in case it has an image. the caller shouldent have to cair
-    //about waht is being shown, just that .show can be called.
-    //use DI
-    async fn show(&self, login: &LoginPayload, id: &Uuid) {
-        println!("name: {}\nid: {}: ", self.sender_name, self.message_id,);
-        self.content.show();
-        self.content.show_img(login, id).await;
+    let presigned_url = res.url;
+    // The path where you want to save the downloaded file
+    let rand_id = rand::rng().random_range(1000..=9999);
+    let output_filepath = format!("downloaded_image_{}.png", rand_id);
+
+    let client = reqwest::Client::new();
+
+    // 3. Make the GET request
+    let response = client.get(&presigned_url).send().await.unwrap();
+
+    let mut file = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .open(&output_filepath)
+        .unwrap();
+
+    // let mut file = File::create(presigned_url).unwrap();
+
+    // 6. Stream the response body and write it to the file
+    let mut stream = response.bytes_stream();
+    let mut downloaded_bytes = 0;
+
+    while let Some(chunk_result) = stream.next().await {
+        let chunk = chunk_result.unwrap(); // Handle potential errors in receiving a chunk
+        file.write_all(&chunk).unwrap(); // Write the chunk to the file
+        downloaded_bytes += chunk.len();
     }
+
+    file.flush().unwrap();
+    output_filepath
 }
 
 async fn get_messages(
@@ -397,25 +416,9 @@ async fn get_messages(
         .bearer_auth(login.token.clone())
         .send()
         .await?;
-    // let raw_text = res.text().await?;
-    // println!("RAW JSON FROM BACKEND:\n{}", raw_text);
-    //
-    // let message_response: MessageResponce = serde_json::from_str(&raw_text)
-    //     .map_err(|e| {
-    //         println!("SERDE ERROR DETAILED: {:?}", e);
-    //         e
-    //     })
-    //     .unwrap(); // Temporarily leave unwrap just to see the print statement above
     let message_responce: MessageResponce = res.json().await.map_err(|e| println!("{e}")).unwrap();
 
-    // .map(|v| {
-    // let data = v.payload;
-    // data
-    // });
     Ok(message_responce.payload)
-
-    // let messages = res.text().await?;
-    // println!("massages:\n {}", messages);
 }
 
 #[derive(Deserialize)]
@@ -457,23 +460,17 @@ async fn send_message(login: &LoginPayload, message: &SendMesage) -> Result<(), 
     Ok(())
 }
 
-async fn show_messages(
-    messages: &[Message],
-    login: &LoginPayload,
-    id: &Uuid,
-) -> Result<(), reqwest::Error> {
+async fn show_messages(messages: &[Message]) -> Result<(), reqwest::Error> {
     print!("{}[2J{}[1;1H", 27 as char, 27 as char);
     for m in messages {
-        m.show(login, id).await;
+        m.content.show().await;
     }
     Ok(())
 }
 
 async fn get_and_show_msg(login_stuff: &LoginPayload, chat_id: &Uuid) {
     let messages = get_messages(&login_stuff, &chat_id).await.unwrap();
-    show_messages(&messages, login_stuff, chat_id)
-        .await
-        .unwrap();
+    show_messages(&messages).await.unwrap();
 }
 
 #[tokio::main]
@@ -506,9 +503,6 @@ async fn user_login() -> Result<LoginPayload, reqwest::Error> {
     let name = name.trim();
 
     let url = format!("{BASE_URL}/auth/login");
-    // let mut params = HashMap::new();
-    // params.insert("username", name);
-    // params.insert("password", password);
     let payload = serde_json::json!({
         "username": name,
         "password": password,
@@ -542,9 +536,4 @@ pub fn write_file(path: &std::path::Path, text: &str) -> Result<(), std::io::Err
     file.write_all(text.as_bytes())?;
     file.flush()?;
     Ok(())
-}
-
-async fn test_socket() {
-    println!("testing ");
-    ()
 }

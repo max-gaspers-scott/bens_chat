@@ -1,3 +1,4 @@
+use clap::builder::Str;
 use futures_util::StreamExt;
 use image::{DynamicImage, Pixel, Rgba, RgbaImage};
 use rand::RngExt;
@@ -21,6 +22,22 @@ use viuer::print;
 // const PORT: u32 = 8081;
 const BASE_URL: &str = "http://localhost:9821"; //9821
 // const BASE_URL: &str = "https://bens-chat.team-stingray.com";
+
+use std::sync::RwLock;
+
+//TODO: i dont like this code. a mutex / global var feels bad
+// and also requiers setter and getter
+static CURRENT_LOGIN: RwLock<Option<LoginPayload>> = RwLock::new(None);
+
+fn set_current_login(payload: LoginPayload) {
+    if let Ok(mut lock) = CURRENT_LOGIN.write() {
+        *lock = Some(payload);
+    }
+}
+
+fn get_current_login() -> Option<LoginPayload> {
+    CURRENT_LOGIN.read().ok().and_then(|lock| lock.clone())
+}
 
 #[derive(Debug)]
 enum Stats {
@@ -120,7 +137,6 @@ impl Window {
             parent: None,
             content,
         };
-        let mut person = String::new();
         //TODO: make new stat for adding people to chat
         //should let anyone in a chant add a new user???
         // while person != "/q" {
@@ -144,9 +160,9 @@ impl Window {
         Action::MakeChat
     }
     async fn handel_login(&mut self) -> Action {
-        self.login = LoginInfo::Loggedin {
-            info: user_login().await.unwrap(),
-        };
+        let info = user_login().await.unwrap();
+        set_current_login(info.clone());
+        self.login = LoginInfo::Loggedin { info };
 
         let uid = match &self.login {
             LoginInfo::Loggedin { info } => &info.username,
@@ -176,17 +192,18 @@ impl Window {
         for c in chats {
             println!(
                 "chat: {},{}",
-                c.content.get_content()["title"],
-                c.content.get_content()["text"]
+                c.content.get_content(),
+                c.content.get_content()
             );
 
-            let content = c.content.get_content();
-            let chat_name = if content["title"].is_null() {
-                content["text"].as_str().unwrap()
-            } else {
-                content["title"].as_str().unwrap_or("title was not found")
-            };
+            // let content = c.content.get_content();
+            // let chat_name = if content["title"].is_null() {
+            //     content["text"].as_str().unwrap()
+            // } else {
+            //     content["title"].as_str().unwrap_or("title was not found")
+            // };
 
+            let chat_name = c.content.get_content();
             hashmap.insert(chat_name.to_string(), c.message_id);
         }
 
@@ -297,10 +314,10 @@ impl SendibleContent {
             }
         }
     }
-    fn get_content(&self) -> serde_json::Value {
+    fn get_content(&self) -> String {
         match self {
-            Self::Text(t) => t.content.clone(),
-            Self::Img(i) => i.content.clone(),
+            Self::Text(t) => t.content.text.clone(),
+            Self::Img(i) => i.content.url.clone(),
         }
     }
 }
@@ -323,11 +340,17 @@ trait MessageInterface {
 
 #[derive(Debug, serde::Deserialize)]
 struct TextMessage {
-    content: serde_json::Value,
+    content: TextContent,
 }
+
+#[derive(Debug, serde::Deserialize)]
+struct TextContent {
+    text: String,
+}
+
 impl MessageInterface for TextMessage {
     async fn show(&self) {
-        let raw = self.content["text"].to_string();
+        let raw = self.content.text.to_string();
         let fixed_input = raw.replace("\\n", "\n").replace("\\", "");
         print!("text: ");
         print_text(&fixed_input);
@@ -336,30 +359,36 @@ impl MessageInterface for TextMessage {
 
 #[derive(Debug, serde::Deserialize)]
 struct ImgMessage {
-    content: serde_json::Value,
+    content: ImgContent,
 }
+
+#[derive(Debug, serde::Deserialize)]
+struct ImgContent {
+    url: String,
+}
+
 impl MessageInterface for ImgMessage {
     async fn show(&self) {
-        if let Some(file) = self.content["url"].as_str() {
-            let url = &format!("{BASE_URL}/minio-fetch?object_key={}", file);
+        let path = self.content.url.clone();
+        let url = &format!("{BASE_URL}/minio-fetch?object_key={}", path);
 
-            let output_filepath = download_img_from_db(login.clone(), url).await;
+        let output_filepath = download_img_from_db(url).await;
 
-            let conf = viuer::Config {
-                absolute_offset: false,
-                ..Default::default()
-            };
-            println!("img: ");
-            viuer::print_from_file(output_filepath, &conf).expect("Image printing failed.");
+        let conf = viuer::Config {
+            absolute_offset: false,
+            ..Default::default()
+        };
+        println!("img: ");
+        viuer::print_from_file(output_filepath, &conf).expect("Image printing failed.");
 
-            //TODO: download the img to disk to dispaly
-            // maybe can you Request
-            // or see if there is an media screaming crate
-            //
-        }
+        //TODO: download the img to disk to dispaly
+        // maybe can you Request
+        // or see if there is an media screaming crate
+        //
     }
 }
-async fn download_img_from_db(login: LoginPayload, url: &str) -> String {
+async fn download_img_from_db(url: &str) -> String {
+    let login = get_current_login().expect("No current login payload found");
     let client = Client::new();
 
     let res = client

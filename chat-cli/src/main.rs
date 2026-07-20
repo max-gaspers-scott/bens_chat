@@ -290,7 +290,6 @@ struct Message {
     message_id: uuid::Uuid,
     sender_name: String,
     parent: Option<uuid::Uuid>,
-    #[serde(flatten)] // look into this
     content: SendibleContent,
     #[serde(default)]
     sent_at: chrono::DateTime<chrono::Utc>,
@@ -301,6 +300,7 @@ struct Message {
 enum SendibleContent {
     Text(TextMessage),
     Img(ImgMessage),
+    Title(TitleMessage),
 }
 
 impl SendibleContent {
@@ -312,12 +312,16 @@ impl SendibleContent {
             Self::Img(i) => {
                 let _ = i.show().await;
             }
+            Self::Title(t) => {
+                let _ = t.show().await;
+            }
         }
     }
     fn get_content(&self) -> String {
         match self {
-            Self::Text(t) => t.content.text.clone(),
-            Self::Img(i) => i.content.url.clone(),
+            Self::Text(t) => t.text.clone(),
+            Self::Img(i) => i.url.clone(),
+            Self::Title(t) => t.title.clone(),
         }
     }
 }
@@ -340,17 +344,12 @@ trait MessageInterface {
 
 #[derive(Debug, serde::Deserialize)]
 struct TextMessage {
-    content: TextContent,
-}
-
-#[derive(Debug, serde::Deserialize)]
-struct TextContent {
     text: String,
 }
 
 impl MessageInterface for TextMessage {
     async fn show(&self) {
-        let raw = self.content.text.to_string();
+        let raw = self.text.to_string();
         let fixed_input = raw.replace("\\n", "\n").replace("\\", "");
         print!("text: ");
         print_text(&fixed_input);
@@ -359,17 +358,12 @@ impl MessageInterface for TextMessage {
 
 #[derive(Debug, serde::Deserialize)]
 struct ImgMessage {
-    content: ImgContent,
-}
-
-#[derive(Debug, serde::Deserialize)]
-struct ImgContent {
     url: String,
 }
 
 impl MessageInterface for ImgMessage {
     async fn show(&self) {
-        let path = self.content.url.clone();
+        let path = self.url.clone();
         let url = &format!("{BASE_URL}/minio-fetch?object_key={}", path);
 
         let output_filepath = download_img_from_db(url).await;
@@ -445,7 +439,14 @@ async fn get_messages(
         .bearer_auth(login.token.clone())
         .send()
         .await?;
-    let message_responce: MessageResponce = res.json().await.map_err(|e| println!("{e}")).unwrap();
+    let text = res.text().await?;
+    println!("DEBUG get_messages raw body: {}", text);
+    let message_responce: MessageResponce = serde_json::from_str(&text)
+        .map_err(|e| {
+            println!("JSON parsing error in get_messages: {}", e);
+            panic!("Failed to parse messages JSON");
+        })
+        .unwrap();
 
     Ok(message_responce.payload)
 }
@@ -464,7 +465,14 @@ async fn get_chats(user_info: &LoginPayload) -> Result<ChatResponce, reqwest::Er
 
     let client = reqwest::Client::new();
     let res = client.get(url).bearer_auth(&user_info.token).send().await?;
-    let chats: ChatResponce = res.json().await?;
+    let text = res.text().await?;
+    println!("DEBUG get_chats raw body: {}", text);
+    let chats: ChatResponce = serde_json::from_str(&text)
+        .map_err(|e| {
+            println!("JSON parsing error in get_chats: {}", e);
+            panic!("Failed to parse chats JSON");
+        })
+        .unwrap();
     println!("get chats status: {:?}", chats.status);
 
     Ok(chats)

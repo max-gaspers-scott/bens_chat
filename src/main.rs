@@ -1,7 +1,11 @@
-mod models;
-use crate::models::Message;
 use crate::models::User;
-
+mod models;
+use crate::models::User;
+mod models;
+use crate::models::User;
+mod models;
+use crate::models::*;
+mod models;
 use axum::http::Method;
 use axum::http::StatusCode;
 use axum::{
@@ -14,6 +18,7 @@ use reqwest;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sqlx::PgPool;
+use sqlx::Pool;
 use sqlx::types::chrono::Utc;
 use sqlx::{postgres::PgPoolOptions, prelude::FromRow};
 use std::collections::HashMap;
@@ -26,133 +31,6 @@ use tower_http::cors::{AllowOrigin, CorsLayer};
 use axum::response::{Html, IntoResponse};
 use tower::service_fn;
 use tower_http::services::ServeDir;
-
-async fn generate_signed_url(object_key: String) -> Result<String, anyhow::Error> {
-    let endpoint = env::var("MINIO_ENDPOINT").unwrap_or_else(|_| "localhost:9000".to_string());
-    let access_key = env::var("MINIO_ACCESS_KEY").unwrap_or_else(|_| "minioadmin".to_string());
-    let secret_key = env::var("MINIO_SECRET_KEY").unwrap_or_else(|_| "minioadmin".to_string());
-    let bucket = env::var("MINIO_BUCKET").unwrap_or_else(|_| "bucket".to_string());
-    let secure = env::var("MINIO_SECURE")
-        .map(|s| s.to_lowercase() == "true")
-        .unwrap_or(false);
-
-    let provider = StaticProvider::new(&access_key, &secret_key, None);
-
-    let minio = Minio::builder()
-        .endpoint(&endpoint)
-        .provider(provider)
-        .secure(secure)
-        .region("us-east-1".to_string()) // Explicitly set region to match MinIO default
-        .build()
-        .map_err(|e| anyhow::anyhow!("Failed to create MinIO client: {}", e))?;
-
-    let presigned_url = minio
-        .presigned_get_object(
-            PresignedArgs::new(bucket, object_key).expires(3600), // 1 hour in seconds
-        )
-        .await
-        .map_err(|e| anyhow::anyhow!("Failed to generate presigned URL: {}", e))?;
-    Ok(presigned_url)
-}
-
-async fn get_signed_url(Path(video_path): Path<String>) -> impl IntoResponse {
-    let object_key = video_path;
-    println!("Environment variables:");
-    println!(
-        "MINIO_ENDPOINT: {}",
-        env::var("MINIO_ENDPOINT").unwrap_or_else(|_| "not set".to_string())
-    );
-    println!(
-        "MINIO_BUCKET: {}",
-        env::var("MINIO_BUCKET").unwrap_or_else(|_| "not set, using default 'test'".to_string())
-    );
-
-    match generate_signed_url(object_key).await {
-        Ok(url) => (StatusCode::OK, url).into_response(),
-        Err(e) => {
-            eprintln!("Error generating signed URL: {}", e);
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Failed to generate signed URL: {}", e),
-            )
-                .into_response()
-        }
-    }
-}
-async fn upload_video(mut multipart: Multipart) -> Result<Json<Value>, (StatusCode, String)> {
-    let endpoint = env::var("MINIO_ENDPOINT").unwrap_or_else(|_| "minio:9000".to_string());
-    let access_key = env::var("MINIO_ACCESS_KEY").unwrap_or_else(|_| "minioadmin".to_string());
-    let secret_key = env::var("MINIO_SECRET_KEY").unwrap_or_else(|_| "minioadmin".to_string());
-    let bucket = env::var("MINIO_BUCKET").unwrap_or_else(|_| "bucket".to_string());
-    let secure = env::var("MINIO_SECURE")
-        .map(|s| s.to_lowercase() == "true")
-        .unwrap_or(false);
-
-    let provider = StaticProvider::new(&access_key, &secret_key, None);
-    let minio = Minio::builder()
-        .endpoint(&endpoint)
-        .provider(provider)
-        .secure(secure)
-        .region("us-east-1".to_string()) // Explicitly set region to match MinIO default
-        .build()
-        .map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Failed to create MinIO client: {}", e),
-            )
-        })?;
-
-    while let Some(field) = multipart
-        .next_field()
-        .await
-        .map_err(|e| (StatusCode::BAD_REQUEST, format!("Multipart error: {}", e)))?
-    {
-        // Accept any field that carries a filename (the uploaded file)
-        let original_name = field
-            .file_name()
-            .map(|s| s.to_string())
-            .unwrap_or_else(|| "upload.mp4".to_string());
-
-        // Prefix with a UUID so every upload gets a unique key
-        let object_key = format!("{}/{}", uuid::Uuid::new_v4(), original_name);
-
-        let data = field.bytes().await.map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Failed to read file bytes: {}", e),
-            )
-        })?;
-
-        minio
-            .put_object(&bucket, &object_key, data)
-            .await
-            .map_err(|e| {
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    format!("MinIO upload failed: {}", e),
-                )
-            })?;
-
-        // Build the public URL using the browser-accessible MinIO endpoint
-        let public_endpoint =
-            env::var("MINIO_PUBLIC_ENDPOINT").unwrap_or_else(|_| "localhost:9000".to_string());
-        let scheme = if secure { "https" } else { "http" };
-        let url = format!("{}://{}/{}/{}", scheme, public_endpoint, bucket, object_key);
-
-        return Ok(Json(json!({
-            "status": true,
-            "message": "File uploaded successfully",
-            "object_key": object_key,
-            "url": url,
-        })));
-    }
-
-    Err((
-        StatusCode::BAD_REQUEST,
-        "No file field found in the request".to_string(),
-    ))
-}
-
 async fn health() -> String {
     "healthy".to_string()
 }
@@ -187,14 +65,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let app = Router::new()
         .route("/health", get(health))
-        .route("/signed-urls/:video_path", get(get_signed_url))
-        .route("/upload", post(upload_video))
-        .route("/python", get(python))
-        .route("/users", post(post_user))
-        .route("/messages", post(post_message))
-        .route("/get-messages", get(get_content_sent_at_sender_id))
-        .route("/get_user_id", get(get_user_id_username))
-        .route("/all-users", get(get_id_username_email))
+        .route("/api/post_user", post(post_user))
+        .route("/api/post_message", post(post_message))
+        .route(
+            "/api/get_username_email_user_id",
+            get(get_username_email_user_id),
+        )
+        .route(
+            "/api/post_conversation_participant",
+            post(post_conversation_participant),
+        )
+        .route("/api/post_conversation", post(post_conversation))
         .fallback_service(static_service)
         .layer(
             CorsLayer::new()
@@ -212,57 +93,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     axum::serve(listener, app).await.unwrap();
     Ok(())
 }
-
-#[derive(sqlx::FromRow, Debug, Deserialize)]
-struct SenderIdQuery {
-    sender_id: uuid::Uuid,
-    receiver_id: uuid::Uuid,
-}
-
-// need to add ..
-// mod models;
-// use crate::models::User;
-
-async fn get_content_sent_at_sender_id(
-    extract::State(pool): extract::State<PgPool>,
-    match_val: Query<SenderIdQuery>,
-) -> Result<Json<Vec<Message>>, (StatusCode, String)> {
-    let query = "SELECT * FROM messages WHERE sender_id = $1 AND receiver_id = $2 ORDER BY sent_at";
-
-    let q = sqlx::query_as::<_, Message>(&query)
-        .bind(match_val.sender_id)
-        .bind(match_val.receiver_id);
-
-    let elemint = q.fetch_all(&pool).await.map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Database err{}", e),
-        )
-    })?;
-
-    Ok(Json(elemint))
-}
-#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]
-pub struct CreateUser {
-    pub email: String,
-    pub username: String,
-    pub password_hash: String,
-}
-// db teble names have a s at the end that is removed in struct name
 // you will need to add serde Deserialize and Deserialize to the structs
-pub async fn post_user(
+pub async fn post_conversation(
     extract::State(pool): extract::State<PgPool>,
-    Json(payload): Json<CreateUser>,
+    Json(payload): Json<Conversation>,
 ) -> Json<Value> {
     // change hardcoded number of values
-    let query =
-        "INSERT INTO users (email, username, password_hash) VALUES ($1, $2, $3) RETURNING *";
+    let query = "INSERT INTO conversations (name, is_group_chat) VALUES ($1, $2) RETURNING *";
 
     //// what is bound is wrong
-    let q = sqlx::query_as::<_, CreateUser>(&query)
-        .bind(payload.email)
-        .bind(payload.username)
-        .bind(payload.password_hash);
+    let q = sqlx::query_as::<_, Conversation>(&query)
+        .bind(payload.name)
+        .bind(payload.is_group_chat);
 
     let result = q.fetch_one(&pool).await;
 
@@ -274,24 +116,39 @@ pub async fn post_user(
 
 // db teble names have a s at the end that is removed in struct name
 // you will need to add serde Deserialize and Deserialize to the structs
-#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]
-pub struct CreateMessage {
-    pub sender_id: uuid::Uuid,
-    pub receiver_id: uuid::Uuid,
-    pub content: String,
-}
-pub async fn post_message(
+pub async fn post_conversation_participant(
     extract::State(pool): extract::State<PgPool>,
-    Json(payload): Json<CreateMessage>,
+    Json(payload): Json<ConversationParticipant>,
 ) -> Json<Value> {
     // change hardcoded number of values
-    let query =
-        "INSERT INTO messages (sender_id, receiver_id, content) VALUES ($1, $2, $3) RETURNING *";
+    let query = "INSERT INTO conversation_participants (conversation_id, user_id) VALUES ($1, $2) RETURNING *";
 
     //// what is bound is wrong
-    let q = sqlx::query_as::<_, CreateMessage>(&query)
+    let q = sqlx::query_as::<_, ConversationParticipant>(&query)
+        .bind(payload.conversation_id)
+        .bind(payload.user_id);
+
+    let result = q.fetch_one(&pool).await;
+
+    match result {
+        Ok(value) => Json(json!({"res": "success", "data": value})),
+        Err(e) => Json(json!({"res": format!("error: {}", e)})),
+    }
+}
+
+// db teble names have a s at the end that is removed in struct name
+// you will need to add serde Deserialize and Deserialize to the structs
+pub async fn post_message(
+    extract::State(pool): extract::State<PgPool>,
+    Json(payload): Json<Message>,
+) -> Json<Value> {
+    // change hardcoded number of values
+    let query = "INSERT INTO messages (conversation_id, sender_id, content) VALUES ($1, $2, $3) RETURNING *";
+
+    //// what is bound is wrong
+    let q = sqlx::query_as::<_, Message>(&query)
+        .bind(payload.conversation_id)
         .bind(payload.sender_id)
-        .bind(payload.receiver_id)
         .bind(payload.content);
 
     let result = q.fetch_one(&pool).await;
@@ -302,77 +159,58 @@ pub async fn post_message(
     }
 }
 
-async fn python() -> Result<Json<Value>, (StatusCode, String)> {
-    // Call the Python FastAPI service
-    let client = reqwest::Client::new();
-    let res = client
-        .get("http://python:8003/chat") // Use service name and correct port
-        .send()
-        .await
-        .map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Request failed: {}", e),
-            )
-        })?;
+#[derive(Debug, Deserialize)]
+struct user_id_query {
+    user_id: uuid::Uuid,
+}
 
-    if res.status().is_client_error() || res.status().is_server_error() {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            format!("Error from Python service: {}", res.status()),
-        ));
+async fn get_username_email_user_id(
+    match_val: Query<user_id_query>,
+    extract::State(pool): extract::State<PgPool>,
+) -> Json<Value> {
+    let query = format!("SELECT * FROM users WHERE user_id = $1");
+    let q = sqlx::query_as::<_, User>(&query).bind(match_val.user_id.clone());
+
+    let elemint = q.fetch_optional(&pool).await;
+
+    match elemint {
+        Ok(Some(elemint)) => Json(json!({
+            "status": "success",
+            "payload": {
+            "username": elemint.username,
+        "email": elemint.email,
+
+            }
+        })),
+        Ok(None) => Json(json!({
+            "status": "error",
+            "error": "User not found"
+        })),
+        _ => Json(json!({
+            "status": "error",
+            "error": "User not found"
+        })),
     }
-
-    let json_response: Value = res.json().await.map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Failed to parse JSON: {}", e),
-        )
-    })?;
-
-    Ok(Json(json!({"payload": json_response})))
 }
-
-#[derive(sqlx::FromRow, Debug, Deserialize)]
-struct UsernameQuery {
-    username: String,
-}
-
-// need to add ..
-// mod models;
-// use crate::models::User;
-
-async fn get_user_id_username(
+// db teble names have a s at the end that is removed in struct name
+// you will need to add serde Deserialize and Deserialize to the structs
+pub async fn post_user(
     extract::State(pool): extract::State<PgPool>,
-    match_val: Query<UsernameQuery>,
-) -> Result<Json<Vec<User>>, (StatusCode, String)> {
-    let query = "SELECT * FROM users WHERE username = $1";
+    Json(payload): Json<User>,
+) -> Json<Value> {
+    // change hardcoded number of values
+    let query = "INSERT INTO users (username, email, display_name) VALUES ($1, $2, $3) RETURNING *";
 
-    let q = sqlx::query_as::<_, User>(&query).bind(match_val.username.clone());
+    //// what is bound is wrong
+    let q = sqlx::query_as::<_, User>(&query)
+        .bind(payload.username)
+        .bind(payload.email)
+        .bind(payload.display_name);
 
-    let elemint = q.fetch_all(&pool).await.map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Database err{}", e),
-        )
-    })?;
+    let result = q.fetch_one(&pool).await;
 
-    Ok(Json(elemint))
-}
-
-async fn get_id_username_email(
-    extract::State(pool): extract::State<PgPool>,
-) -> Result<Json<Vec<User>>, (StatusCode, String)> {
-    let query = "SELECT id, username, email, password_hash, created_at FROM users";
-
-    let q = sqlx::query_as::<_, User>(&query);
-
-    let elemint = q.fetch_all(&pool).await.map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Database err{}", e),
-        )
-    })?;
-
-    Ok(Json(elemint))
+    match result {
+        Ok(value) => Json(json!({"res": "success", "data": value})),
+        Err(e) => Json(json!({"res": format!("error: {}", e)})),
+    }
 }

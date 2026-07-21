@@ -190,18 +190,7 @@ impl Window {
         let mut hashmap = HashMap::new();
 
         for c in chats {
-            println!(
-                "chat: {},{}",
-                c.content.get_content(),
-                c.content.get_content()
-            );
-
-            // let content = c.content.get_content();
-            // let chat_name = if content["title"].is_null() {
-            //     content["text"].as_str().unwrap()
-            // } else {
-            //     content["title"].as_str().unwrap_or("title was not found")
-            // };
+            println!("chat: {}", c.content.get_content());
 
             let chat_name = c.content.get_content();
             hashmap.insert(chat_name.to_string(), c.message_id);
@@ -357,6 +346,20 @@ impl MessageInterface for TextMessage {
 }
 
 #[derive(Debug, serde::Deserialize)]
+struct TitleMessage {
+    title: String,
+}
+
+impl MessageInterface for TitleMessage {
+    async fn show(&self) {
+        let raw = self.title.to_string();
+        let fixed_input = raw.replace("\\n", "\n").replace("\\", "");
+        print!("title: ");
+        print_text(&fixed_input);
+    }
+}
+
+#[derive(Debug, serde::Deserialize)]
 struct ImgMessage {
     url: String,
 }
@@ -466,7 +469,6 @@ async fn get_chats(user_info: &LoginPayload) -> Result<ChatResponce, reqwest::Er
     let client = reqwest::Client::new();
     let res = client.get(url).bearer_auth(&user_info.token).send().await?;
     let text = res.text().await?;
-    println!("DEBUG get_chats raw body: {}", text);
     let chats: ChatResponce = serde_json::from_str(&text)
         .map_err(|e| {
             println!("JSON parsing error in get_chats: {}", e);
@@ -476,6 +478,19 @@ async fn get_chats(user_info: &LoginPayload) -> Result<ChatResponce, reqwest::Er
     println!("get chats status: {:?}", chats.status);
 
     Ok(chats)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_deserialize_chats() {
+        let raw_json = r#"{"payload":[{"content":{"title":"chat1"},"message_id":"f79f1427-436d-47e2-8c47-aed6ff2bf09d","sender_name":"a","sent_at":"2026-06-23T17:24:23.562447Z"},{"content":{"text":"hi\n"},"message_id":"64f792b3-dc94-424f-be7e-b5cc67ee8541","sender_name":"a","sent_at":"2026-06-23T17:24:31.023501Z"},{"content":{"title":"chat2"},"message_id":"c8ed85b9-2c60-4c87-ba62-21a0212c5433","sender_name":"a","sent_at":"2026-06-23T17:41:58.152064Z"},{"content":{"text":"chat1"},"message_id":"65e3936f-261f-4839-ab06-85244e618eef","sender_name":"a","sent_at":"2026-06-23T19:24:10.642075Z"},{"content":{"text":"chat2"},"message_id":"85d12ced-eac4-4c7b-b924-3e0afafac189","sender_name":"a","sent_at":"2026-06-27T17:22:17.348149Z"},{"content":{"text":"chat3"},"message_id":"80795351-3872-4d3b-98ec-bb3d0a8a350b","sender_name":"a","sent_at":"2026-07-07T19:21:32.874907Z"},{"content":{"text":"oneOff"},"message_id":"3fa5477f-0b03-4138-ace6-3b2093160447","sender_name":"a","sent_at":"2026-07-07T22:52:29.002109Z"},{"content":{"text":"oneOff"},"message_id":"34816fb5-ba05-428b-a83d-e8de04775099","sender_name":"a","sent_at":"2026-07-08T18:22:17.177489Z"},{"content":{"text":"a_b"},"message_id":"130b18ea-4d97-4b45-9e01-b16390b9f158","sender_name":"b","sent_at":"2026-07-09T23:05:56.530122Z"},{"content":{"text":"a_b_test"},"message_id":"f0a65207-39a6-498f-a432-52a3b44f8622","sender_name":"a","sent_at":"2026-07-09T23:06:51.625501Z"},{"content":{"title":"a & b"},"message_id":"30a7bccb-cb81-4dbb-8f0f-4558b1b51763","sender_name":"a","sent_at":"2026-07-16T13:03:45.536795Z"},{"content":{"text":"canata"},"message_id":"bd97da05-07f8-45f3-bc01-226fdb16b615","sender_name":"a","sent_at":"2026-07-18T20:07:13.754509Z"},{"content":{"text":"iter"},"message_id":"8f563e28-5ef2-4025-8caa-ecf362ce077b","sender_name":"a","sent_at":"2026-07-19T16:44:00.876965Z"}],"status":"success"}"#;
+        let chats: ChatResponce = serde_json::from_str(raw_json).unwrap();
+        assert_eq!(chats.status, "success");
+        assert_eq!(chats.payload.len(), 13);
+    }
 }
 
 async fn send_message(login: &LoginPayload, message: &SendMesage) -> Result<(), reqwest::Error> {

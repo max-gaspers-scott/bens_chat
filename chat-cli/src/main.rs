@@ -574,11 +574,11 @@ async fn user_login() -> Result<LoginPayload, reqwest::Error> {
     let user_info = data.payload;
 
     let path = std::path::Path::new("./token.txt");
-    match write_file(path, &user_info.token) {
-        Ok(_) => {}
-        Err(e) => println!("write failed error: {}", e),
-    }
-
+    // match write_file(path, &user_info.token) {
+    //     Ok(_) => {}
+    //     Err(e) => println!("write failed error: {}", e),
+    // }
+    //
     print!("{}[2J{}[1;1H", 27 as char, 27 as char);
     Ok(user_info)
 }

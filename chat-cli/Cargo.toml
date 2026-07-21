@@ -3,22 +3,31 @@ name = "chat-cli"
 version = "0.1.0"
 edition = "2024"
 
+authors = ["Max Gaspers Scott gaspersscottma@gmail.com"]
+description = "A cli for chatting with friends"
+license = "Apache-2.0"
+
+readme = "README.md"
+homepage = "https://github.com/max-gaspers-scott/bens_chat/tree/main/chat-cli"
+repository = "https://github.com/max-gaspers-scott/bens_chat/tree/main/chat-cli"
+documentation = "https://docs.rs/bens_chat/chat-cli"
+
+
+keywords = ["utility", "cli"]
+categories = ["command-line-utilities", "development-tools::cargo-plugins"]
+
+
 [dependencies]
 reqwest = { version = "0.13", features = ["json", "form", "stream"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
-
 uuid = { version = "1.23.1", features = ["serde", "v4"] }
-
 tokio = { version = "1", features = ["full", "time"] }
 clap = { version = "4.5.56", features = ["derive"] }
-
 rust_socketio = { version = "0.6.0", features = ["async"] }
-chrono = { version = "0.4", features = ["serde"] }          # For Utc
-
+chrono = { version = "0.4", features = ["serde"] }                    # For Utc
 viuer = { version = "0.11.0", features = ["print-file"] }
-
 image = "0.25.10"
-termimad = "0.31"       # Use the latest version available
+termimad = "0.31"                                                     # Use the latest version available
 futures-util = "0.3.32"
 rand = "0.10.2"

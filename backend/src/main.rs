@@ -169,10 +169,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok(())
     }
 
-    match run_custom_migrations(&pool).await {
-        Ok(_) => println!("All migrations processed successfully!"),
-        Err(e) => eprintln!("Error during custom migrations: {}", e),
-    }
+    // match run_custom_migrations(&pool).await {
+    //     Ok(_) => println!("All migrations processed successfully!"),
+    //     Err(e) => eprintln!("Error during custom migrations: {}", e),
+    // }
 
     let static_dir = env::var("STATIC_DIR").unwrap_or_else(|_| "../frontend/build".to_string());
     let static_dir_path = std::path::PathBuf::from(&static_dir);

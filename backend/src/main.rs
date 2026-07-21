@@ -88,10 +88,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         s.on("join", |socket: SocketRef, Data::<String>(room)| {
             socket.join(room).ok();
         });
-        s.on("message", |s: SocketRef, Data(data): Data<serde_json::Value>| {
-            println!("message received from FE: {:?}", data);
-            s.emit("message back", "hello to the frontend").ok();
-        })
+        s.on(
+            "message",
+            |s: SocketRef, Data(data): Data<serde_json::Value>| {
+                println!("message received from FE: {:?}", data);
+                s.emit("message back", "hello to the frontend").ok();
+            },
+        )
     });
 
     let db_url = env::var("DATABASE_URL")

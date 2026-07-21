@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-reqwest = { version = "0.13", features = ["json", "form"] }
+reqwest = { version = "0.13", features = ["json", "form", "stream"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
 
@@ -16,5 +16,9 @@ clap = { version = "4.5.56", features = ["derive"] }
 rust_socketio = { version = "0.6.0", features = ["async"] }
 chrono = { version = "0.4", features = ["serde"] }          # For Utc
 
-termimad = "0.31" # Use the latest version available
+viuer = { version = "0.11.0", features = ["print-file"] }
+
+image = "0.25.10"
+termimad = "0.31"       # Use the latest version available
 futures-util = "0.3.32"
+rand = "0.10.2"

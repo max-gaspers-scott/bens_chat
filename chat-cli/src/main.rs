@@ -20,8 +20,8 @@ use viuer::print;
 
 // should be in env, but this will work for now
 // const PORT: u32 = 8081;
-const BASE_URL: &str = "http://localhost:9821"; //9821
-// const BASE_URL: &str = "https://bens-chat.team-stingray.com";
+// const BASE_URL: &str = "http://localhost:9821"; //9821
+const BASE_URL: &str = "https://bens-chat.team-stingray.com";
 
 use std::sync::RwLock;
 
@@ -369,14 +369,14 @@ impl MessageInterface for ImgMessage {
         let path = self.url.clone();
         let url = &format!("{BASE_URL}/minio-fetch?object_key={}", path);
 
-        let output_filepath = download_img_from_db(url).await;
+        let img = download_img_from_db(url).await;
 
         let conf = viuer::Config {
             absolute_offset: false,
             ..Default::default()
         };
         println!("img: ");
-        viuer::print_from_file(output_filepath, &conf).expect("Image printing failed.");
+        viuer::print(&img, &conf).expect("Image printing failed.");
 
         //TODO: download the img to disk to dispaly
         // maybe can you Request
@@ -384,7 +384,7 @@ impl MessageInterface for ImgMessage {
         //
     }
 }
-async fn download_img_from_db(url: &str) -> String {
+async fn download_img_from_db(url: &str) -> DynamicImage {
     let login = get_current_login().expect("No current login payload found");
     let client = Client::new();
 
@@ -397,35 +397,14 @@ async fn download_img_from_db(url: &str) -> String {
     let res: Img = res.json().await.map_err(|e| println!("{e}")).unwrap();
 
     let presigned_url = res.url;
-    // The path where you want to save the downloaded file
-    let rand_id = rand::rng().random_range(1000..=9999);
-    let output_filepath = format!("downloaded_image_{}.png", rand_id);
 
     let client = reqwest::Client::new();
 
     // 3. Make the GET request
     let response = client.get(&presigned_url).send().await.unwrap();
+    let bytes = response.bytes().await.unwrap();
 
-    let mut file = OpenOptions::new()
-        .create(true)
-        .write(true)
-        .open(&output_filepath)
-        .unwrap();
-
-    // let mut file = File::create(presigned_url).unwrap();
-
-    // 6. Stream the response body and write it to the file
-    let mut stream = response.bytes_stream();
-    let mut downloaded_bytes = 0;
-
-    while let Some(chunk_result) = stream.next().await {
-        let chunk = chunk_result.unwrap(); // Handle potential errors in receiving a chunk
-        file.write_all(&chunk).unwrap(); // Write the chunk to the file
-        downloaded_bytes += chunk.len();
-    }
-
-    file.flush().unwrap();
-    output_filepath
+    image::load_from_memory(&bytes).expect("Failed to load image from memory")
 }
 
 async fn get_messages(

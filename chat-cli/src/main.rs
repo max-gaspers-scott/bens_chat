@@ -340,7 +340,6 @@ impl MessageInterface for TextMessage {
     async fn show(&self) {
         let raw = self.text.to_string();
         let fixed_input = raw.replace("\\n", "\n").replace("\\", "");
-        print!("text: ");
         print_text(&fixed_input);
     }
 }
@@ -494,6 +493,11 @@ async fn send_message(login: &LoginPayload, message: &SendMesage) -> Result<(), 
 async fn show_messages(messages: &[Message]) -> Result<(), reqwest::Error> {
     print!("{}[2J{}[1;1H", 27 as char, 27 as char);
     for m in messages {
+        if m.sender_name == get_current_login().unwrap().username {
+            print!("you: ");
+        } else {
+            print!("{}: ", m.sender_name);
+        }
         m.content.show().await;
     }
     Ok(())

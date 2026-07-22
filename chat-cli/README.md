@@ -1,4 +1,6 @@
 # bens-chat-cli
+![Demo Video](./bens-chat.gif)
+
 
 This is a CLI for getting messages from the parent chat project without having to open a web browser
 

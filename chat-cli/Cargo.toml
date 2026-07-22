@@ -10,7 +10,6 @@ license = "Apache-2.0"
 readme = "README.md"
 homepage = "https://max-gaspers-scott.team-stingray.com/project2"
 repository = "https://github.com/max-gaspers-scott/bens_chat/tree/main/chat-cli"
-documentation = "https://docs.rs/bens_chat/chat-cli"
 
 
 keywords = ["utility", "cli"]

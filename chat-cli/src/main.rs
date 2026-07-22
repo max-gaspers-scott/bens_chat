@@ -168,7 +168,6 @@ impl Window {
             LoginInfo::Loggedin { info } => &info.username,
             LoginInfo::NotLoggedin => &String::from("no user id"),
         };
-        println!("{uid}");
 
         Action::Login
     }
@@ -440,8 +439,6 @@ struct ChatResponce {
 
 //TODO: need user id as query param
 async fn get_chats(user_info: &LoginPayload) -> Result<ChatResponce, reqwest::Error> {
-    println!("{}", user_info.username);
-    println!("{}", user_info.token);
     let url = format!("{BASE_URL}/user-chats?username={}", user_info.username);
 
     let client = reqwest::Client::new();
@@ -453,7 +450,6 @@ async fn get_chats(user_info: &LoginPayload) -> Result<ChatResponce, reqwest::Er
             panic!("Failed to parse chats JSON");
         })
         .unwrap();
-    println!("get chats status: {:?}", chats.status);
 
     Ok(chats)
 }
@@ -556,7 +552,7 @@ async fn user_login() -> Result<LoginPayload, reqwest::Error> {
     };
     let user_info = data.payload;
 
-    let path = std::path::Path::new("./token.txt");
+    // let path = std::path::Path::new("./token.txt");
     // match write_file(path, &user_info.token) {
     //     Ok(_) => {}
     //     Err(e) => println!("write failed error: {}", e),

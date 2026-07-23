@@ -1,5 +1,5 @@
 use clap::builder::Str;
-use futures_util::StreamExt;
+use futures_util::{FutureExt, StreamExt};
 use image::{DynamicImage, Pixel, Rgba, RgbaImage};
 use rand::RngExt;
 use reqwest::Response;
@@ -20,7 +20,7 @@ use viuer::print;
 
 // should be in env, but this will work for now
 // const PORT: u32 = 8081;
-// const BASE_URL: &str = "http://localhost:9821"; //9821
+// const BASE_URL: &str = "http://localhost:8081"; //9821
 const BASE_URL: &str = "https://bens-chat.team-stingray.com";
 
 use std::sync::RwLock;
@@ -542,13 +542,15 @@ async fn user_login() -> Result<LoginPayload, reqwest::Error> {
     let client = reqwest::Client::new();
 
     let res = client.post(url).json(&payload).send().await?;
-
     //TODO: data may come back as {error: "messages"}
     //whitch can not be turned into a LoginPayload, and will error.
 
     let data: LoginResponse = match res.json().await {
         Ok(res) => res,
-        Err(e) => panic!("could not get api res into LoginRes: {e}"),
+        Err(e) => {
+            println!("could not get api res into LoginRes: {e}");
+            panic!("errer htting api: {e}")
+        }
     };
     let user_info = data.payload;
 

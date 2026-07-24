@@ -13,6 +13,7 @@ use std::fs::File;
 use std::fs::OpenOptions;
 use std::future::Future;
 use std::io::Write;
+use std::thread::AccessError;
 use std::time::Duration;
 use termimad::minimad::Text;
 use termimad::{print_inline, print_text};
@@ -21,8 +22,8 @@ use viuer::print;
 
 // should be in env, but this will work for now
 // const PORT: u32 = 8081;
-// const BASE_URL: &str = "http://localhost:8081"; //9821
-const BASE_URL: &str = "https://bens-chat.team-stingray.com";
+const BASE_URL: &str = "http://localhost:9821"; //9821
+// const BASE_URL: &str = "https://bens-chat.team-stingray.com";
 
 use std::sync::RwLock;
 
@@ -77,6 +78,7 @@ enum LoginInfo {
 }
 
 // will need to post new user for sing up
+#[derive(serde::Serialize)]
 struct User {
     pub name: String,
     pub phone_number: Option<String>,
@@ -98,6 +100,7 @@ impl Window {
     fn transition(&mut self, Action: Action) {
         match (&self.state, Action) {
             (Stats::Login, Action::Login) => self.state = Stats::Chats,
+            // (Stats::Login, _) => self.state = Stats::Login,
             (Stats::Login, Action::SignUp) => self.state = Stats::Signup,
             (Stats::Signup, Action::SignUp) => self.state = Stats::Login,
 
@@ -132,33 +135,28 @@ impl Window {
         // get info
         let name = get_input("whats your name");
 
-        let phone_number= get_input("what phone number");
+        let phone_number = Some(get_input("what phone number"));
 
-        let email = get_input("whats your email");
+        let email = Some(get_input("whats your email"));
 
         let password_hash = get_input("what password");
         // hash it
-        let usr = User {
-            phone_number
+        let user = User {
+            phone_number,
             name,
             email,
-            password_hash
-
-        }
+            password_hash,
+        };
         let url = format!("{BASE_URL}/users");
         let client = reqwest::Client::new();
 
-        match client
-            .post(url)
-            .json(message)
-            .bearer_auth(login.token.clone())
-            .send()
-            .await
-        {
-            Ok(_) => {}
-            Err(e) => println!("error posting message: {e}"),
+        match client.post(url).json(&user).send().await {
+            Ok(_) => Action::Login,
+            Err(e) => {
+                println!("error posting message: {e}");
+                Action::SignUp
+            }
         } // post to db
-        Action::SignUp
     }
 
     async fn handel_make_chat(&mut self) -> Action {
@@ -205,6 +203,10 @@ impl Window {
         Action::MakeChat
     }
     async fn handel_login(&mut self) -> Action {
+        if get_input("make a new acount? y/n").trim() == "y" {
+            println!("new acount");
+            return Action::SignUp;
+        }
         let info = user_login().await.unwrap();
         set_current_login(info.clone());
         self.login = LoginInfo::Loggedin { info };

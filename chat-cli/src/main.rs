@@ -1,4 +1,5 @@
 use clap::builder::Str;
+use cool_cli_input::get_input;
 use futures_util::{FutureExt, StreamExt};
 use image::{DynamicImage, Pixel, Rgba, RgbaImage};
 use rand::RngExt;
@@ -42,6 +43,7 @@ fn get_current_login() -> Option<LoginPayload> {
 #[derive(Debug)]
 enum Stats {
     Login,
+    Signup,
     Chats, // viewing  creating and deleating chats
     NewChat,
     Conversation { chat_id: Uuid }, // viewing and sending messages
@@ -51,6 +53,7 @@ enum Stats {
 enum Action {
     Logout,
     Login,
+    SignUp,
     GotoChats,
     MakeChat,
     GotoConversation { chat_id: Uuid },
@@ -73,6 +76,14 @@ enum LoginInfo {
     NotLoggedin,
 }
 
+// will need to post new user for sing up
+struct User {
+    pub name: String,
+    pub phone_number: Option<String>,
+    pub email: Option<String>,
+    pub password_hash: String,
+}
+
 struct Window {
     state: Stats,
     login: LoginInfo,
@@ -87,6 +98,9 @@ impl Window {
     fn transition(&mut self, Action: Action) {
         match (&self.state, Action) {
             (Stats::Login, Action::Login) => self.state = Stats::Chats,
+            (Stats::Login, Action::SignUp) => self.state = Stats::Signup,
+            (Stats::Signup, Action::SignUp) => self.state = Stats::Login,
+
             (Stats::Chats, Action::GotoConversation { chat_id }) => {
                 self.state = Stats::Conversation { chat_id }
             }
@@ -105,6 +119,7 @@ impl Window {
         loop {
             let action = match &self.state {
                 Stats::Login => self.handel_login().await,
+                Stats::Signup => self.handel_signup().await,
                 Stats::Chats => self.handel_chats().await,
                 Stats::NewChat => self.handel_make_chat().await,
                 Stats::Conversation { chat_id } => self.handel_conversation(*chat_id).await,
@@ -112,6 +127,13 @@ impl Window {
             self.transition(action);
         }
     }
+
+    async fn handel_signup(&mut self) -> Action {
+        // get info
+        // post to db
+        Action::SignUp
+    }
+
     async fn handel_make_chat(&mut self) -> Action {
         let login_stuff = match &self.login {
             LoginInfo::Loggedin { info } => Some(info),
@@ -122,12 +144,8 @@ impl Window {
         }
         .unwrap();
         println!("make a chat");
-        println!("your root message title: ");
-        let mut title = String::new();
-        match std::io::stdin().read_line(&mut title) {
-            Ok(_) => {}
-            Err(e) => println!("an error reading from buffer: {e}"),
-        }
+        let title = get_input("your root message title: ");
+
         let title = title.trim();
         let content = serde_json::json!({
             "text": title,
@@ -196,10 +214,8 @@ impl Window {
         }
 
         let mut buff = String::new();
-        println!("what chat do you want to see");
-
-        std::io::stdin().read_line(&mut buff).unwrap();
-        let input = buff.trim();
+        let chat_name = get_input("what chat do you want to see");
+        let input = chat_name.trim();
         if input == "n" {
             return Action::MakeChat;
         }
@@ -224,9 +240,7 @@ impl Window {
             get_and_show_msg(&login_stuff, &chat_id).await;
 
             println!("------------------");
-            println!("your message: ");
-            let mut message = String::new();
-            std::io::stdin().read_line(&mut message);
+            let message = get_input("your message: ");
             let content = serde_json::json!({
                 "text": message.trim(),
             });
@@ -513,23 +527,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 async fn user_login() -> Result<LoginPayload, reqwest::Error> {
-    println!("what is your name");
-    let mut name = String::new();
-    match std::io::stdin().read_line(&mut name) {
-        Ok(_) => {}
-        Err(e) => {
-            println!("error getting name: {e}");
-        }
-    }
-
-    println!("what is your password");
-    let mut password = String::new();
-    match std::io::stdin().read_line(&mut password) {
-        Ok(_) => {}
-        Err(e) => {
-            print!("error getting password: {e}");
-        }
-    }
+    let name = get_input("what is your name");
+    let password = get_input("what is your password");
     let password = password.trim();
     let name = name.trim();
 

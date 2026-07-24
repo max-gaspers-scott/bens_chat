@@ -130,7 +130,34 @@ impl Window {
 
     async fn handel_signup(&mut self) -> Action {
         // get info
-        // post to db
+        let name = get_input("whats your name");
+
+        let phone_number= get_input("what phone number");
+
+        let email = get_input("whats your email");
+
+        let password_hash = get_input("what password");
+        // hash it
+        let usr = User {
+            phone_number
+            name,
+            email,
+            password_hash
+
+        }
+        let url = format!("{BASE_URL}/users");
+        let client = reqwest::Client::new();
+
+        match client
+            .post(url)
+            .json(message)
+            .bearer_auth(login.token.clone())
+            .send()
+            .await
+        {
+            Ok(_) => {}
+            Err(e) => println!("error posting message: {e}"),
+        } // post to db
         Action::SignUp
     }
 

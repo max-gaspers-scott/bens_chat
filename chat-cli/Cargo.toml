@@ -30,3 +30,4 @@ image = "0.25.10"
 termimad = "0.31"                                                     # Use the latest version available
 futures-util = "0.3.32"
 rand = "0.10.2"
+cool_cli_input = "0.1.0"

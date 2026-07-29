@@ -31,3 +31,4 @@ termimad = "0.31"                                                     # Use the 
 futures-util = "0.3.32"
 rand = "0.10.2"
 cool_cli_input = "0.1.0"
+inquire = { version = "0.9.4", features = ["editor"] }

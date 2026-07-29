@@ -2,6 +2,11 @@ use clap::builder::Str;
 use cool_cli_input::get_input;
 use futures_util::{FutureExt, StreamExt};
 use image::{DynamicImage, Pixel, Rgba, RgbaImage};
+use inquire::{
+    Editor, Text,
+    error::InquireResult,
+    ui::{Color, RenderConfig, Styled},
+};
 use rand::RngExt;
 use reqwest::Response;
 use reqwest::{self, Client, Request};
@@ -15,15 +20,15 @@ use std::future::Future;
 use std::io::Write;
 use std::thread::AccessError;
 use std::time::Duration;
-use termimad::minimad::Text;
+// use termimad::minimad::Text;
 use termimad::{print_inline, print_text};
 use uuid::Uuid;
 use viuer::print;
 
 // should be in env, but this will work for now
 // const PORT: u32 = 8081;
-const BASE_URL: &str = "http://localhost:9821"; //9821
-// const BASE_URL: &str = "https://bens-chat.team-stingray.com";
+// const BASE_URL: &str = "http://localhost:9821"; //9821
+const BASE_URL: &str = "https://bens-chat.team-stingray.com";
 
 use std::sync::RwLock;
 
@@ -133,7 +138,8 @@ impl Window {
 
     async fn handel_signup(&mut self) -> Action {
         // get info
-        let name = get_input("whats your name");
+        // let name = get_input("whats your name");
+        let name = inquire::Text::new("what is your name").prompt().unwrap();
 
         let phone_number = Some(get_input("what phone number"));
 
@@ -242,18 +248,20 @@ impl Window {
             hashmap.insert(chat_name.to_string(), c.message_id);
         }
 
-        let mut buff = String::new();
-        let chat_name = get_input("what chat do you want to see");
-        let input = chat_name.trim();
-        if input == "n" {
-            return Action::MakeChat;
-        }
+        loop {
+            let chat_name = get_input("what chat do you want to see (or 'n' for new chat)");
+            let input = chat_name.trim();
+            if input == "n" {
+                return Action::MakeChat;
+            }
 
-        println!("your input: {input}");
-        let selected_id = hashmap.get(input).unwrap();
-
-        Action::GotoConversation {
-            chat_id: *selected_id,
+            if let Some(&selected_id) = hashmap.get(input) {
+                return Action::GotoConversation {
+                    chat_id: selected_id,
+                };
+            } else {
+                println!("Chat '{}' not found. Please try again.", input);
+            }
         }
     }
     async fn handel_conversation(&mut self, chat_id: Uuid) -> Action {
@@ -269,7 +277,9 @@ impl Window {
             get_and_show_msg(&login_stuff, &chat_id).await;
 
             println!("------------------");
-            let message = get_input("your message: ");
+            // let message = get_input("your message: ");
+            let message = inquire::Editor::new("type your message").prompt().unwrap();
+
             let content = serde_json::json!({
                 "text": message.trim(),
             });

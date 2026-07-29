@@ -145,7 +145,7 @@ impl Window {
 
         let email = Some(get_input("whats your email"));
 
-        let password_hash = get_input("what password");
+        let password_hash = inquire::Password::new("what password").prompt().unwrap();
         // hash it
         let user = User {
             phone_number,
@@ -568,7 +568,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 async fn user_login() -> Result<LoginPayload, reqwest::Error> {
     loop {
         let name = get_input("what is your name");
-        let password = get_input("what is your password");
+
+        let password = inquire::Password::new("what is your password")
+            .prompt()
+            .unwrap();
         let password = password.trim();
         let name = name.trim();
 

@@ -566,40 +566,59 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 async fn user_login() -> Result<LoginPayload, reqwest::Error> {
-    let name = get_input("what is your name");
-    let password = get_input("what is your password");
-    let password = password.trim();
-    let name = name.trim();
+    loop {
+        let name = get_input("what is your name");
+        let password = get_input("what is your password");
+        let password = password.trim();
+        let name = name.trim();
 
-    let url = format!("{BASE_URL}/auth/login");
-    let payload = serde_json::json!({
-        "username": name,
-        "password": password,
-    });
+        let url = format!("{BASE_URL}/auth/login");
+        let payload = serde_json::json!({
+            "username": name,
+            "password": password,
+        });
 
-    let client = reqwest::Client::new();
+        let client = reqwest::Client::new();
 
-    let res = client.post(url).json(&payload).send().await?;
-    //TODO: data may come back as {error: "messages"}
-    //whitch can not be turned into a LoginPayload, and will error.
+        let res = match client.post(url).json(&payload).send().await {
+            Ok(res) => res,
+            Err(e) => {
+                println!("Network or request error: {e}. Please try again.");
+                continue;
+            }
+        };
 
-    let data: LoginResponse = match res.json().await {
-        Ok(res) => res,
-        Err(e) => {
-            println!("could not get api res into LoginRes: {e}");
-            panic!("errer htting api: {e}")
+        if !res.status().is_success() {
+            let status = res.status();
+            let body = res.text().await.unwrap_or_default();
+            println!(
+                "Login failed (status {}): {}. Please try again.",
+                status, body
+            );
+            continue;
         }
-    };
-    let user_info = data.payload;
 
-    // let path = std::path::Path::new("./token.txt");
-    // match write_file(path, &user_info.token) {
-    //     Ok(_) => {}
-    //     Err(e) => println!("write failed error: {}", e),
-    // }
-    //
-    print!("{}[2J{}[1;1H", 27 as char, 27 as char);
-    Ok(user_info)
+        let text = match res.text().await {
+            Ok(text) => text,
+            Err(e) => {
+                println!("Failed to read response: {e}. Please try again.");
+                continue;
+            }
+        };
+
+        let data: LoginResponse = match serde_json::from_str(&text) {
+            Ok(data) => data,
+            Err(e) => {
+                println!("Could not parse login response ({e}). Please try again.");
+                continue;
+            }
+        };
+
+        let user_info = data.payload;
+
+        print!("{}[2J{}[1;1H", 27 as char, 27 as char);
+        return Ok(user_info);
+    }
 }
 
 pub fn write_file(path: &std::path::Path, text: &str) -> Result<(), std::io::Error> {

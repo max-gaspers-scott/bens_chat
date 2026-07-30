@@ -5,8 +5,11 @@ use minio_rsc::provider::StaticProvider;
 use minio_rsc::{Minio, xml::ser::to_string};
 use reqwest::header::{ACCEPT, CONTENT_TYPE as CT};
 use serde::{Deserialize, Serialize};
+use socketioxide::{
+    SocketIo,
+    extract::{Data, SocketRef},
+};
 use std::cmp::min;
-
 mod auth;
 mod models;
 
@@ -78,21 +81,23 @@ fn build_cors_layer() -> CorsLayer {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("backend starting");
     dotenv::dotenv().ok();
-    // let (socket_layer, io) = SocketIo::new_layer();
-    //
-    // io.ns("/", |s: SocketRef| {
-    //     println!("New socket connected: {:?}", s.id);
-    //     s.on("join", |socket: SocketRef, Data::<String>(room)| {
-    //         socket.join(room).ok();
-    //     });
-    //     s.on(
-    //         "message",
-    //         |s: SocketRef, Data(data): Data<serde_json::Value>| {
-    //             println!("message received from FE: {:?}", data);
-    //             s.emit("message back", "hello to the frontend").ok();
-    //         },
-    //     )
-    // });
+    let (socket_layer, io) = SocketIo::new_layer();
+
+    io.ns("/", |s: SocketRef| {
+        println!("New socket connected: {:?}", s.id);
+        s.on(
+            "message",
+            |s: SocketRef, Data(data): Data<serde_json::Value>| {
+                println!("message received from FE: {:?}", data);
+                let msg_back = format!("echo: {:?}", data);
+                // s.emit("message back", msg_back).ok();
+
+                s.broadcast()
+                    .emit("message back", format!("echo: {:?}", data))
+                    .ok();
+            },
+        )
+    });
 
     let db_url = env::var("DATABASE_URL")
         .unwrap_or_else(|_| "postgres://dbuser:p@localhost:1111/data".to_string());
@@ -225,7 +230,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .merge(public_routes)
         .merge(protected_routes)
         .fallback_service(static_service) // 1. Register fallback first
-        // .layer(socket_layer) // 2. Wrap everything with the socket layer
+        .layer(socket_layer) // 2. Wrap everything with the socket layer
         .layer(build_cors_layer()) // 4. Wrap with CORS as the outermost layer
         .with_state(pool);
 

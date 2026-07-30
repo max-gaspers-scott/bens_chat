@@ -2,6 +2,11 @@ use clap::builder::Str;
 use cool_cli_input::get_input;
 use futures_util::{FutureExt, StreamExt};
 use image::{DynamicImage, Pixel, Rgba, RgbaImage};
+use inquire::{
+    Editor, Text,
+    error::InquireResult,
+    ui::{Color, RenderConfig, Styled},
+};
 use rand::RngExt;
 use reqwest::Response;
 use reqwest::{self, Client, Request};
@@ -15,15 +20,15 @@ use std::future::Future;
 use std::io::Write;
 use std::thread::AccessError;
 use std::time::Duration;
-use termimad::minimad::Text;
+// use termimad::minimad::Text;
 use termimad::{print_inline, print_text};
 use uuid::Uuid;
 use viuer::print;
 
 // should be in env, but this will work for now
 // const PORT: u32 = 8081;
-const BASE_URL: &str = "http://localhost:9821"; //9821
-// const BASE_URL: &str = "https://bens-chat.team-stingray.com";
+// const BASE_URL: &str = "http://localhost:9821"; //9821
+const BASE_URL: &str = "https://bens-chat.team-stingray.com";
 
 use std::sync::RwLock;
 
@@ -133,13 +138,14 @@ impl Window {
 
     async fn handel_signup(&mut self) -> Action {
         // get info
-        let name = get_input("whats your name");
+        // let name = get_input("whats your name");
+        let name = inquire::Text::new("what is your name").prompt().unwrap();
 
         let phone_number = Some(get_input("what phone number"));
 
         let email = Some(get_input("whats your email"));
 
-        let password_hash = get_input("what password");
+        let password_hash = inquire::Password::new("what password").prompt().unwrap();
         // hash it
         let user = User {
             phone_number,
@@ -242,18 +248,20 @@ impl Window {
             hashmap.insert(chat_name.to_string(), c.message_id);
         }
 
-        let mut buff = String::new();
-        let chat_name = get_input("what chat do you want to see");
-        let input = chat_name.trim();
-        if input == "n" {
-            return Action::MakeChat;
-        }
+        loop {
+            let chat_name = get_input("what chat do you want to see (or 'n' for new chat)");
+            let input = chat_name.trim();
+            if input == "n" {
+                return Action::MakeChat;
+            }
 
-        println!("your input: {input}");
-        let selected_id = hashmap.get(input).unwrap();
-
-        Action::GotoConversation {
-            chat_id: *selected_id,
+            if let Some(&selected_id) = hashmap.get(input) {
+                return Action::GotoConversation {
+                    chat_id: selected_id,
+                };
+            } else {
+                println!("Chat '{}' not found. Please try again.", input);
+            }
         }
     }
     async fn handel_conversation(&mut self, chat_id: Uuid) -> Action {
@@ -270,6 +278,7 @@ impl Window {
 
             println!("------------------");
             let message = get_input("your message: ");
+
             let content = serde_json::json!({
                 "text": message.trim(),
             });
@@ -556,40 +565,62 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 async fn user_login() -> Result<LoginPayload, reqwest::Error> {
-    let name = get_input("what is your name");
-    let password = get_input("what is your password");
-    let password = password.trim();
-    let name = name.trim();
+    loop {
+        let name = get_input("what is your name");
 
-    let url = format!("{BASE_URL}/auth/login");
-    let payload = serde_json::json!({
-        "username": name,
-        "password": password,
-    });
+        let password = inquire::Password::new("what is your password")
+            .prompt()
+            .unwrap();
+        let password = password.trim();
+        let name = name.trim();
 
-    let client = reqwest::Client::new();
+        let url = format!("{BASE_URL}/auth/login");
+        let payload = serde_json::json!({
+            "username": name,
+            "password": password,
+        });
 
-    let res = client.post(url).json(&payload).send().await?;
-    //TODO: data may come back as {error: "messages"}
-    //whitch can not be turned into a LoginPayload, and will error.
+        let client = reqwest::Client::new();
 
-    let data: LoginResponse = match res.json().await {
-        Ok(res) => res,
-        Err(e) => {
-            println!("could not get api res into LoginRes: {e}");
-            panic!("errer htting api: {e}")
+        let res = match client.post(url).json(&payload).send().await {
+            Ok(res) => res,
+            Err(e) => {
+                println!("Network or request error: {e}. Please try again.");
+                continue;
+            }
+        };
+
+        if !res.status().is_success() {
+            let status = res.status();
+            let body = res.text().await.unwrap_or_default();
+            println!(
+                "Login failed (status {}): {}. Please try again.",
+                status, body
+            );
+            continue;
         }
-    };
-    let user_info = data.payload;
 
-    // let path = std::path::Path::new("./token.txt");
-    // match write_file(path, &user_info.token) {
-    //     Ok(_) => {}
-    //     Err(e) => println!("write failed error: {}", e),
-    // }
-    //
-    print!("{}[2J{}[1;1H", 27 as char, 27 as char);
-    Ok(user_info)
+        let text = match res.text().await {
+            Ok(text) => text,
+            Err(e) => {
+                println!("Failed to read response: {e}. Please try again.");
+                continue;
+            }
+        };
+
+        let data: LoginResponse = match serde_json::from_str(&text) {
+            Ok(data) => data,
+            Err(e) => {
+                println!("Could not parse login response ({e}). Please try again.");
+                continue;
+            }
+        };
+
+        let user_info = data.payload;
+
+        print!("{}[2J{}[1;1H", 27 as char, 27 as char);
+        return Ok(user_info);
+    }
 }
 
 pub fn write_file(path: &std::path::Path, text: &str) -> Result<(), std::io::Error> {

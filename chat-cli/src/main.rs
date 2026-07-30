@@ -277,8 +277,7 @@ impl Window {
             get_and_show_msg(&login_stuff, &chat_id).await;
 
             println!("------------------");
-            // let message = get_input("your message: ");
-            let message = inquire::Editor::new("type your message").prompt().unwrap();
+            let message = get_input("your message: ");
 
             let content = serde_json::json!({
                 "text": message.trim(),

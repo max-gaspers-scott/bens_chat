@@ -5,6 +5,7 @@ import CreateChat from './components/CreateChat';
 import ChatList from './components/ChatList';
 import ChatView from './components/ChatView';
 import ResetPassword from './components/ResetPassword';
+import WebSocketTest from './components/WebSocketTest';
 import './App.css';
 import { api } from './api/api';
 
@@ -152,6 +153,7 @@ function App() {
           </div>
         )}
       </main>
+      <WebSocketTest />
     </div>
   );
 }

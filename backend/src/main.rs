@@ -26,10 +26,7 @@ use axum::{
 use bcrypt::{DEFAULT_COST, hash, verify};
 use core::str;
 use serde_json::{Value, json};
-use socketioxide::{
-    SocketIo,
-    extract::{Data, SocketRef},
-};
+
 use sqlx::{PgPool, postgres::PgPoolOptions};
 use std::{env, result::Result};
 use tower::service_fn;
@@ -81,21 +78,21 @@ fn build_cors_layer() -> CorsLayer {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("backend starting");
     dotenv::dotenv().ok();
-    let (socket_layer, io) = SocketIo::new_layer();
-
-    io.ns("/", |s: SocketRef| {
-        println!("New socket connected: {:?}", s.id);
-        s.on("join", |socket: SocketRef, Data::<String>(room)| {
-            socket.join(room).ok();
-        });
-        s.on(
-            "message",
-            |s: SocketRef, Data(data): Data<serde_json::Value>| {
-                println!("message received from FE: {:?}", data);
-                s.emit("message back", "hello to the frontend").ok();
-            },
-        )
-    });
+    // let (socket_layer, io) = SocketIo::new_layer();
+    //
+    // io.ns("/", |s: SocketRef| {
+    //     println!("New socket connected: {:?}", s.id);
+    //     s.on("join", |socket: SocketRef, Data::<String>(room)| {
+    //         socket.join(room).ok();
+    //     });
+    //     s.on(
+    //         "message",
+    //         |s: SocketRef, Data(data): Data<serde_json::Value>| {
+    //             println!("message received from FE: {:?}", data);
+    //             s.emit("message back", "hello to the frontend").ok();
+    //         },
+    //     )
+    // });
 
     let db_url = env::var("DATABASE_URL")
         .unwrap_or_else(|_| "postgres://dbuser:p@localhost:1111/data".to_string());
@@ -228,8 +225,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .merge(public_routes)
         .merge(protected_routes)
         .fallback_service(static_service) // 1. Register fallback first
-        .layer(socket_layer) // 2. Wrap everything with the socket layer
-        .layer(Extension(io)) // 3. Provide the SocketIo instance to request extensions
+        // .layer(socket_layer) // 2. Wrap everything with the socket layer
         .layer(build_cors_layer()) // 4. Wrap with CORS as the outermost layer
         .with_state(pool);
 
@@ -393,7 +389,6 @@ async fn get_message_id_sender_name_content_parent(
 async fn post_message(
     Extension(auth_user): Extension<AuthUser>,
     extract::State(pool): extract::State<PgPool>,
-    Extension(io): Extension<SocketIo>,
     Json(payload): Json<Message>,
 ) -> Json<Value> {
     let text = &payload
@@ -426,11 +421,7 @@ async fn post_message(
 
         let post_gemini_res = q.fetch_one(&pool).await;
         match post_gemini_res {
-            Ok(value) => {
-                if let Some(parent) = payload.parent {
-                    let _ = io.to(parent.to_string()).emit("update", &value);
-                }
-            }
+            Ok(value) => {}
             Err(e) => println!("error happend trying to post gemini responce: {e}"),
         }
     }
@@ -456,10 +447,7 @@ async fn post_message(
         let result = q.fetch_one(&pool).await;
 
         match result {
-            Ok(value) => {
-                let _ = io.to(parent.to_string()).emit("update", &value);
-                Json(json!({"res": "success", "data": value}))
-            }
+            Ok(value) => Json(json!({"res": "success", "data": value})),
             Err(e) => Json(json!({"res": format!("error: {}", e)})),
         }
     } else {
@@ -503,8 +491,6 @@ async fn post_message(
         if let Err(e) = tx.commit().await {
             return Json(json!({"res": format!("error: {}", e)}));
         }
-
-        let _ = io.to(chat_id.to_string()).emit("update", &message);
 
         Json(json!({"res": "success", "data": message}))
     }

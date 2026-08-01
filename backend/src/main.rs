@@ -5,8 +5,11 @@ use minio_rsc::provider::StaticProvider;
 use minio_rsc::{Minio, xml::ser::to_string};
 use reqwest::header::{ACCEPT, CONTENT_TYPE as CT};
 use serde::{Deserialize, Serialize};
+use socketioxide::{
+    SocketIo,
+    extract::{Data, SocketRef},
+};
 use std::cmp::min;
-
 mod auth;
 mod models;
 
@@ -26,10 +29,7 @@ use axum::{
 use bcrypt::{DEFAULT_COST, hash, verify};
 use core::str;
 use serde_json::{Value, json};
-use socketioxide::{
-    SocketIo,
-    extract::{Data, SocketRef},
-};
+
 use sqlx::{PgPool, postgres::PgPoolOptions};
 use std::{env, result::Result};
 use tower::service_fn;
@@ -81,28 +81,54 @@ fn build_cors_layer() -> CorsLayer {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("backend starting");
     dotenv::dotenv().ok();
-    let (socket_layer, io) = SocketIo::new_layer();
-
-    io.ns("/", |s: SocketRef| {
-        println!("New socket connected: {:?}", s.id);
-        s.on("join", |socket: SocketRef, Data::<String>(room)| {
-            socket.join(room).ok();
-        });
-        s.on(
-            "message",
-            |s: SocketRef, Data(data): Data<serde_json::Value>| {
-                println!("message received from FE: {:?}", data);
-                s.emit("message back", "hello to the frontend").ok();
-            },
-        )
-    });
-
     let db_url = env::var("DATABASE_URL")
         .unwrap_or_else(|_| "postgres://dbuser:p@localhost:1111/data".to_string());
     let pool = PgPoolOptions::new()
         .max_connections(100)
         .connect(&db_url)
         .await?;
+
+    io.ns("/", move |s: SocketRef| {
+        println!("New socket connected: {:?}", s.id);
+        let pool_clone = pool.clone();
+
+        // Extract username from auth handshake / headers if available, or listen to a join event
+        s.on(
+            "join_chats",
+            move |s: SocketRef, Data(username): Data<String>| {
+                let pool = pool_clone.clone();
+                tokio::spawn(async move {
+                    match sqlx::query_scalar::<_, Uuid>(
+                        "SELECT chat_id FROM chat_participants WHERE user_name = $1",
+                    )
+                    .bind(username)
+                    .fetch_all(&pool)
+                    .await
+                    {
+                        Ok(chat_ids) => {
+                            for chat_id in chat_ids {
+                                s.join(chat_id.to_string()).ok();
+                            }
+                            println!("Socket joined all chat rooms for user");
+                        }
+                        Err(e) => {
+                            println!("Error fetching user chats for socket join: {e}");
+                        }
+                    }
+                });
+            },
+        );
+
+        s.on(
+            "message",
+            |s: SocketRef, Data(data): Data<serde_json::Value>| {
+                println!("message received from FE: {:?}", data);
+                s.broadcast()
+                    .emit("message back", format!("echo: {:?}", data))
+                    .ok();
+            },
+        )
+    });
 
     // Fully custom migration runner that bypasses strict SQLx checksum validation
     async fn run_custom_migrations(pool: &PgPool) -> Result<(), Box<dyn std::error::Error>> {
@@ -229,7 +255,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .merge(protected_routes)
         .fallback_service(static_service) // 1. Register fallback first
         .layer(socket_layer) // 2. Wrap everything with the socket layer
-        .layer(Extension(io)) // 3. Provide the SocketIo instance to request extensions
         .layer(build_cors_layer()) // 4. Wrap with CORS as the outermost layer
         .with_state(pool);
 
@@ -393,7 +418,8 @@ async fn get_message_id_sender_name_content_parent(
 async fn post_message(
     Extension(auth_user): Extension<AuthUser>,
     extract::State(pool): extract::State<PgPool>,
-    Extension(io): Extension<SocketIo>,
+
+    extract::State(io): extract::State<SocketIo>,
     Json(payload): Json<Message>,
 ) -> Json<Value> {
     let text = &payload
@@ -426,11 +452,7 @@ async fn post_message(
 
         let post_gemini_res = q.fetch_one(&pool).await;
         match post_gemini_res {
-            Ok(value) => {
-                if let Some(parent) = payload.parent {
-                    let _ = io.to(parent.to_string()).emit("update", &value);
-                }
-            }
+            Ok(value) => {}
             Err(e) => println!("error happend trying to post gemini responce: {e}"),
         }
     }
@@ -456,9 +478,20 @@ async fn post_message(
         let result = q.fetch_one(&pool).await;
 
         match result {
-            Ok(value) => {
-                let _ = io.to(parent.to_string()).emit("update", &value);
-                Json(json!({"res": "success", "data": value}))
+            Ok(ref value) => {
+                let pool_clone = pool.clone();
+                let io_clone = io.clone();
+                let msg_val = json!({"res": "success", "data": value});
+                let msg_id = value.message_id;
+                tokio::spawn(async move {
+                    if let Ok(root_id) = get_root_chat_id(&pool_clone, msg_id).await {
+                        io_clone
+                            .to(root_id.to_string())
+                            .emit("new_message", &msg_val)
+                            .ok();
+                    }
+                });
+                Json(msg_val)
             }
             Err(e) => Json(json!({"res": format!("error: {}", e)})),
         }
@@ -504,9 +537,20 @@ async fn post_message(
             return Json(json!({"res": format!("error: {}", e)}));
         }
 
-        let _ = io.to(chat_id.to_string()).emit("update", &message);
+        let pool_clone = pool.clone();
+        let io_clone = io.clone();
+        let msg_val = json!({"res": "success", "data": message});
+        let msg_id = message.message_id;
+        tokio::spawn(async move {
+            if let Ok(root_id) = get_root_chat_id(&pool_clone, msg_id).await {
+                io_clone
+                    .to(root_id.to_string())
+                    .emit("new_message", &msg_val)
+                    .ok();
+            }
+        });
 
-        Json(json!({"res": "success", "data": message}))
+        Json(msg_val)
     }
 }
 #[derive(Deserialize, Debug, Serialize)]
@@ -820,4 +864,27 @@ async fn get_fetch_url(
         Ok(url) => Json(json!({"status": "success", "url": url})),
         Err(e) => Json(json!({"status": "error", "error": e.to_string()})),
     }
+}
+
+async fn get_root_chat_id(pool: &PgPool, message_id: Uuid) -> Result<Uuid, sqlx::Error> {
+    sqlx::query_scalar::<_, Uuid>(
+        r#"
+        WITH RECURSIVE chat_ancestry AS (
+            SELECT message_id, parent
+            FROM messages
+            WHERE message_id = $1
+            UNION ALL
+            SELECT m.message_id, m.parent
+            FROM messages m
+            JOIN chat_ancestry ca ON m.message_id = ca.parent
+        )
+        SELECT message_id
+        FROM chat_ancestry
+        WHERE parent IS NULL
+        LIMIT 1
+        "#,
+    )
+    .bind(message_id)
+    .fetch_one(pool)
+    .await
 }

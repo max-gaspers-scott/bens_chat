@@ -161,11 +161,17 @@ function ChatView({ chatId, currentUser, onSelectChat }) {
 
     loadMessages();
 
+    const handleRefreshMessages = () => {
+      loadMessages();
+    };
+    window.addEventListener('refreshMessages', handleRefreshMessages);
+
     const intervalId = setInterval(() => {
       loadMessages();
     }, 3000);
 
     return () => {
+      window.removeEventListener('refreshMessages', handleRefreshMessages);
       if (intervalId) {
         clearInterval(intervalId);
       }

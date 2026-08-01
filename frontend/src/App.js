@@ -1,3 +1,4 @@
+import { io } from 'socket.io-client';
 import { useState, useEffect, useCallback } from 'react';
 import SignUp from './components/SignUp';
 import Login from './components/Login';
@@ -5,6 +6,7 @@ import CreateChat from './components/CreateChat';
 import ChatList from './components/ChatList';
 import ChatView from './components/ChatView';
 import ResetPassword from './components/ResetPassword';
+import WebSocketTest from './components/WebSocketTest';
 import './App.css';
 import { api } from './api/api';
 
@@ -71,6 +73,36 @@ function App() {
     setSelectedChatId(null);
     setView('login');
   }, []);
+
+
+  // Connect to Socket.io and join user chat rooms for real-time messages & notifications
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const socketUrl = window.location.origin.includes('localhost') || window.location.origin.includes('127.0.0.1')
+      ? 'http://localhost:8081'
+      : window.location.origin;
+
+    const socket = io(socketUrl, {
+      path: '/socket.io',
+      transports: ['websocket', 'polling'],
+    });
+
+    socket.on('connect', () => {
+      console.log('Socket connected:', socket.id);
+      socket.emit('join_chats', currentUser.username);
+    });
+
+    socket.on('new_message', (data) => {
+      console.log('New message received via socket:', data);
+      window.dispatchEvent(new CustomEvent('refreshChats'));
+      window.dispatchEvent(new CustomEvent('refreshMessages', { detail: data }));
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [currentUser]);
 
   useEffect(() => {
     api.registerUnauthorizedHandler(handleLogout);
@@ -152,6 +184,7 @@ function App() {
           </div>
         )}
       </main>
+      <WebSocketTest />
     </div>
   );
 }

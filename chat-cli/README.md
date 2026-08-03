@@ -17,6 +17,8 @@ The .exe file is also provided
 
 run bens-chat-cli
 
+choose to create an account and enter your username and password, or login with your existing account
+
 type the name of the chat you want to enter or use "n" to create a new chat
 
 type your message and hit enter to send it

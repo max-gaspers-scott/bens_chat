@@ -20,7 +20,6 @@ use std::future::Future;
 use std::io::Write;
 use std::thread::AccessError;
 use std::time::Duration;
-// use termimad::minimad::Text;
 use termimad::{print_inline, print_text};
 use uuid::Uuid;
 use viuer::print;
@@ -32,7 +31,7 @@ const BASE_URL: &str = "https://bens-chat.team-stingray.com";
 
 use std::sync::RwLock;
 
-//TODO: i dont like this code. a mutex / global var feels bad (code smell)
+//TODO: a mutex / global var feels bad (code smell)
 // and also requiers setter and getter
 static CURRENT_LOGIN: RwLock<Option<LoginPayload>> = RwLock::new(None);
 
@@ -82,7 +81,6 @@ enum LoginInfo {
     NotLoggedin,
 }
 
-// will need to post new user for sing up
 #[derive(serde::Serialize)]
 struct User {
     pub name: String,
@@ -137,8 +135,6 @@ impl Window {
     }
 
     async fn handel_signup(&mut self) -> Action {
-        // get info
-        // let name = get_input("whats your name");
         let name = inquire::Text::new("what is your name").prompt().unwrap();
 
         let phone_number = Some(get_input("what phone number"));
@@ -265,7 +261,6 @@ impl Window {
         .unwrap();
         loop {
             get_and_show_msg(&login_stuff, &chat_id).await;
-
             println!("------------------");
             let message = get_input("your message: ");
 
@@ -433,7 +428,6 @@ async fn download_img_from_db(url: &str) -> DynamicImage {
 
     let client = reqwest::Client::new();
 
-    // 3. Make the GET request
     let response = client.get(&presigned_url).send().await.unwrap();
     let bytes = response.bytes().await.unwrap();
 

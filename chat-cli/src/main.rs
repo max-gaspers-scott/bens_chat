@@ -32,7 +32,7 @@ const BASE_URL: &str = "https://bens-chat.team-stingray.com";
 
 use std::sync::RwLock;
 
-//TODO: i dont like this code. a mutex / global var feels bad
+//TODO: i dont like this code. a mutex / global var feels bad (code smell)
 // and also requiers setter and getter
 static CURRENT_LOGIN: RwLock<Option<LoginPayload>> = RwLock::new(None);
 
@@ -102,8 +102,8 @@ impl Window {
             login: LoginInfo::NotLoggedin,
         }
     }
-    fn transition(&mut self, Action: Action) {
-        match (&self.state, Action) {
+    fn transition(&mut self, action: Action) {
+        match (&self.state, action) {
             (Stats::Login, Action::Login) => self.state = Stats::Chats,
             // (Stats::Login, _) => self.state = Stats::Login,
             (Stats::Login, Action::SignUp) => self.state = Stats::Signup,
@@ -186,16 +186,6 @@ impl Window {
             parent: None,
             content,
         };
-        //TODO: make new stat for adding people to chat
-        //should let anyone in a chant add a new user???
-        // while person != "/q" {
-        //     println!("who do you want to add to the chat. /q to exit");
-        //     match std::io::stdin().read_line(&mut person) {
-        //         Ok(_) => {}
-        //         Err(e) => println!("error reading person name"),
-        //     }
-        //     let person = person.trim();
-        // }
 
         match send_message(login_stuff, &msg).await {
             Ok(_) => {}
@@ -322,8 +312,6 @@ struct MessageResponce {
     status: String,
 }
 
-// #{buffers} get_messages puts the json result into dmessageResponce, wich has an araray of Messages, and a dmessages has a SendibleContent. SendibleContent is an emun of to variants that have json values as there fields. the compiler cant get the json filed into the enum
-
 #[derive(Debug, serde::Deserialize)]
 struct Message {
     #[serde(default)]
@@ -427,11 +415,6 @@ impl MessageInterface for ImgMessage {
         };
         println!("img: ");
         viuer::print(&img, &conf).expect("Image printing failed.");
-
-        //TODO: download the img to disk to dispaly
-        // maybe can you Request
-        // or see if there is an media screaming crate
-        //
     }
 }
 async fn download_img_from_db(url: &str) -> DynamicImage {
@@ -489,7 +472,6 @@ struct ChatResponce {
     status: String,
 }
 
-//TODO: need user id as query param
 async fn get_chats(user_info: &LoginPayload) -> Result<ChatResponce, reqwest::Error> {
     let url = format!("{BASE_URL}/user-chats?username={}", user_info.username);
 

@@ -20,7 +20,6 @@ use std::future::Future;
 use std::io::Write;
 use std::thread::AccessError;
 use std::time::Duration;
-// use termimad::minimad::Text;
 use termimad::{print_inline, print_text};
 use uuid::Uuid;
 use viuer::print;
@@ -32,7 +31,7 @@ const BASE_URL: &str = "https://bens-chat.team-stingray.com";
 
 use std::sync::RwLock;
 
-//TODO: i dont like this code. a mutex / global var feels bad
+//TODO: a mutex / global var feels bad (code smell)
 // and also requiers setter and getter
 static CURRENT_LOGIN: RwLock<Option<LoginPayload>> = RwLock::new(None);
 
@@ -82,7 +81,6 @@ enum LoginInfo {
     NotLoggedin,
 }
 
-// will need to post new user for sing up
 #[derive(serde::Serialize)]
 struct User {
     pub name: String,
@@ -102,8 +100,8 @@ impl Window {
             login: LoginInfo::NotLoggedin,
         }
     }
-    fn transition(&mut self, Action: Action) {
-        match (&self.state, Action) {
+    fn transition(&mut self, action: Action) {
+        match (&self.state, action) {
             (Stats::Login, Action::Login) => self.state = Stats::Chats,
             // (Stats::Login, _) => self.state = Stats::Login,
             (Stats::Login, Action::SignUp) => self.state = Stats::Signup,
@@ -137,8 +135,6 @@ impl Window {
     }
 
     async fn handel_signup(&mut self) -> Action {
-        // get info
-        // let name = get_input("whats your name");
         let name = inquire::Text::new("what is your name").prompt().unwrap();
 
         let phone_number = Some(get_input("what phone number"));
@@ -186,16 +182,6 @@ impl Window {
             parent: None,
             content,
         };
-        //TODO: make new stat for adding people to chat
-        //should let anyone in a chant add a new user???
-        // while person != "/q" {
-        //     println!("who do you want to add to the chat. /q to exit");
-        //     match std::io::stdin().read_line(&mut person) {
-        //         Ok(_) => {}
-        //         Err(e) => println!("error reading person name"),
-        //     }
-        //     let person = person.trim();
-        // }
 
         match send_message(login_stuff, &msg).await {
             Ok(_) => {}
@@ -275,7 +261,6 @@ impl Window {
         .unwrap();
         loop {
             get_and_show_msg(&login_stuff, &chat_id).await;
-
             println!("------------------");
             let message = get_input("your message: ");
 
@@ -321,8 +306,6 @@ struct MessageResponce {
     payload: Vec<Message>,
     status: String,
 }
-
-// #{buffers} get_messages puts the json result into dmessageResponce, wich has an araray of Messages, and a dmessages has a SendibleContent. SendibleContent is an emun of to variants that have json values as there fields. the compiler cant get the json filed into the enum
 
 #[derive(Debug, serde::Deserialize)]
 struct Message {
@@ -427,11 +410,6 @@ impl MessageInterface for ImgMessage {
         };
         println!("img: ");
         viuer::print(&img, &conf).expect("Image printing failed.");
-
-        //TODO: download the img to disk to dispaly
-        // maybe can you Request
-        // or see if there is an media screaming crate
-        //
     }
 }
 async fn download_img_from_db(url: &str) -> DynamicImage {
@@ -450,7 +428,6 @@ async fn download_img_from_db(url: &str) -> DynamicImage {
 
     let client = reqwest::Client::new();
 
-    // 3. Make the GET request
     let response = client.get(&presigned_url).send().await.unwrap();
     let bytes = response.bytes().await.unwrap();
 
@@ -489,7 +466,6 @@ struct ChatResponce {
     status: String,
 }
 
-//TODO: need user id as query param
 async fn get_chats(user_info: &LoginPayload) -> Result<ChatResponce, reqwest::Error> {
     let url = format!("{BASE_URL}/user-chats?username={}", user_info.username);
 

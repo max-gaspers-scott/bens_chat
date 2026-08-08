@@ -81,6 +81,8 @@ fn build_cors_layer() -> CorsLayer {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("backend starting");
     dotenv::dotenv().ok();
+    let (socket_layer, io) = SocketIo::new_layer();
+
     let db_url = env::var("DATABASE_URL")
         .unwrap_or_else(|_| "postgres://dbuser:p@localhost:1111/data".to_string());
     let pool = PgPoolOptions::new()
@@ -88,7 +90,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .connect(&db_url)
         .await?;
 
+    let pool_for_ns = pool.clone();
     io.ns("/", move |s: SocketRef| {
+        let pool = pool_for_ns.clone();
         println!("New socket connected: {:?}", s.id);
         let pool_clone = pool.clone();
 
@@ -418,8 +422,7 @@ async fn get_message_id_sender_name_content_parent(
 async fn post_message(
     Extension(auth_user): Extension<AuthUser>,
     extract::State(pool): extract::State<PgPool>,
-
-    extract::State(io): extract::State<SocketIo>,
+    Extension(io): Extension<SocketIo>,
     Json(payload): Json<Message>,
 ) -> Json<Value> {
     let text = &payload
@@ -483,11 +486,12 @@ async fn post_message(
                 let io_clone = io.clone();
                 let msg_val = json!({"res": "success", "data": value});
                 let msg_id = value.message_id;
+                let msg_val_clone = msg_val.clone();
                 tokio::spawn(async move {
                     if let Ok(root_id) = get_root_chat_id(&pool_clone, msg_id).await {
                         io_clone
                             .to(root_id.to_string())
-                            .emit("new_message", &msg_val)
+                            .emit("new_message", &msg_val_clone)
                             .ok();
                     }
                 });
@@ -541,11 +545,12 @@ async fn post_message(
         let io_clone = io.clone();
         let msg_val = json!({"res": "success", "data": message});
         let msg_id = message.message_id;
+        let msg_val_clone = msg_val.clone();
         tokio::spawn(async move {
             if let Ok(root_id) = get_root_chat_id(&pool_clone, msg_id).await {
                 io_clone
                     .to(root_id.to_string())
-                    .emit("new_message", &msg_val)
+                    .emit("new_message", &msg_val_clone)
                     .ok();
             }
         });

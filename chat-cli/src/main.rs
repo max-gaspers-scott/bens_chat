@@ -32,7 +32,7 @@ const BASE_URL: &str = "https://bens-chat.team-stingray.com";
 use std::sync::RwLock;
 
 //TODO: a mutex / global var feels bad (code smell)
-// and also requiers setter and getter
+// and also requires setter and getter
 static CURRENT_LOGIN: RwLock<Option<LoginPayload>> = RwLock::new(None);
 
 fn set_current_login(payload: LoginPayload) {
@@ -139,7 +139,7 @@ impl Window {
 
         let phone_number = Some(get_input("what phone number"));
 
-        let email = Some(get_input("whats your email"));
+        let email = Some(get_input("what's your email"));
 
         let password_hash = inquire::Password::new("what password").prompt().unwrap();
         // hash it
@@ -195,8 +195,8 @@ impl Window {
         Action::MakeChat
     }
     async fn handel_login(&mut self) -> Action {
-        if get_input("make a new acount? y/n").trim() == "y" {
-            println!("new acount");
+        if get_input("make a new account? y/n").trim() == "y" {
+            println!("new account");
             return Action::SignUp;
         }
         let info = user_login().await.unwrap();

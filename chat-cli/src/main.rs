@@ -177,6 +177,10 @@ impl Window {
         let content = serde_json::json!({
             "text": title,
         });
+        if title == "/exit" {
+            print!("{}[2J{}[1;1H", 27 as char, 27 as char);
+            return Action::GotoChats;
+        }
         let msg = SendMesage {
             sender_name: login_stuff.username.clone(),
             parent: None,

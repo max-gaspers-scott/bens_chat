@@ -246,9 +246,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "/messages",
             get(get_message_id_sender_name_content_parent).post(post_message),
         )
-        // .route("/users", get(get_user_id_username))
-        // .route("/chats", post(post_chat)) // no more chats, so just post mesages
-        //
         .route("/password-set", post(set_password))
         .route("/minio-fetch", get(get_fetch_url))
         .route("/minio-post", get(get_put_url))
@@ -757,13 +754,12 @@ async fn post_chat(
 pub async fn post_chat_participant(
     Extension(auth_user): Extension<AuthUser>,
     extract::State(pool): extract::State<PgPool>,
-    Json(payload): Json<ChatParticipant>,
+    Json(payload): Json<NewChatParticipant>,
 ) -> Json<Value> {
     // change hardcoded number of values
     let query = "INSERT INTO chat_participants (chat_id, user_name) VALUES ($1, $2) RETURNING *";
 
-    //// what is bound is wrong
-    let q = sqlx::query_as::<_, ChatParticipant>(&query)
+    let q = sqlx::query_as::<_, NewChatParticipant>(&query)
         .bind(payload.chat_id)
         .bind(payload.user_name);
 

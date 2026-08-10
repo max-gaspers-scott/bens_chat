@@ -1,13 +1,13 @@
 # Bens Chat
 
 
-A chat app for Ben (and anyone else who wants to use it). This software prioritizes flexibility as well as preformance, witch is the reasoning behind the tree schema within postgres. 
+A chat app for Ben (and anyone else who wants to use it). This software prioritizes flexibility as well as performance, witch is the reasoning behind the tree schema within postgres. 
 
-## instalation / usage
-This can be used via the web or by downlaoding the CLI tool
+## installation / usage
+This can be used via the web or by downloading the CLI tool
 
 ### web
-Go to https://bens-chat.team-stingray.com/ and create an acount
+Go to https://bens-chat.team-stingray.com/ and create an account
 ### CLI
 cargo:
 ```bash

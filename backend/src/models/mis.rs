@@ -37,3 +37,8 @@ pub struct UploadUrlQuery {
     pub chat_id: Uuid,
     pub file_extension: String,
 }
+#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]
+pub struct NewChatParticipant {
+    pub chat_id: uuid::Uuid,
+    pub user_name: String,
+}

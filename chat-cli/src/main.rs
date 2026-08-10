@@ -63,6 +63,11 @@ enum Action {
     MakeChat,
     GotoConversation { chat_id: Uuid },
 }
+#[derive(serde::Serialize)]
+struct ChatParticipant {
+    chat_id: uuid::Uuid,
+    user_name: String,
+}
 
 #[derive(Deserialize)]
 struct LoginResponse {
@@ -177,21 +182,37 @@ impl Window {
         let content = serde_json::json!({
             "text": title,
         });
+        if title == "/exit" {
+            print!("{}[2J{}[1;1H", 27 as char, 27 as char);
+            return Action::GotoChats;
+        }
         let msg = SendMesage {
             sender_name: login_stuff.username.clone(),
             parent: None,
             content,
         };
 
-        match send_message(login_stuff, &msg).await {
-            Ok(_) => {}
-            Err(e) => println!("error sendimg message: {e}"),
+        let msg_id = match send_message(login_stuff, &msg).await {
+            Ok(PostMsgRes { data }) => data.message_id,
+            Err(e) => {
+                println!("error sendimg message: {e}");
+                return Action::GotoChats;
+            }
+        };
+
+        // add users to chat
+        //
+        let other_user_name = get_input("who do you want to chat with").trim().to_string();
+
+        let other_user = ChatParticipant {
+            chat_id: msg_id,
+            user_name: other_user_name,
+        };
+        match post_userchat(login_stuff, &other_user).await {
+            Ok(_) => println!("posted to user chats"),
+            Err(e) => println!("error adding a user to the chat"),
         }
 
-        if title == "/exit" {
-            print!("{}[2J{}[1;1H", 27 as char, 27 as char);
-            return Action::GotoChats;
-        }
         Action::MakeChat
     }
     async fn handel_login(&mut self) -> Action {
@@ -495,14 +516,42 @@ mod tests {
     }
 }
 
-async fn send_message(login: &LoginPayload, message: &SendMesage) -> Result<(), reqwest::Error> {
-    println!("running send message");
+#[derive(Deserialize, Debug)]
+struct PostMsgData {
+    message_id: uuid::Uuid,
+}
+#[derive(Deserialize, Debug)]
+struct PostMsgRes {
+    data: PostMsgData,
+}
+async fn send_message(
+    login: &LoginPayload,
+    message: &SendMesage,
+) -> Result<PostMsgRes, reqwest::Error> {
     let url = format!("{BASE_URL}/messages");
+    let client = reqwest::Client::new();
+
+    let response = client
+        .post(url)
+        .json(message)
+        .bearer_auth(login.token.clone())
+        .send()
+        .await?;
+
+    let parsed_res = response.json::<PostMsgRes>().await?;
+    Ok(parsed_res)
+}
+
+async fn post_userchat(
+    login: &LoginPayload,
+    chat_participant: &ChatParticipant,
+) -> Result<(), reqwest::Error> {
+    let url = format!("{BASE_URL}/user-chats");
     let client = reqwest::Client::new();
 
     match client
         .post(url)
-        .json(message)
+        .json(chat_participant)
         .bearer_auth(login.token.clone())
         .send()
         .await

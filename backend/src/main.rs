@@ -135,74 +135,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     // Fully custom migration runner that bypasses strict SQLx checksum validation
-    async fn run_custom_migrations(pool: &PgPool) -> Result<(), Box<dyn std::error::Error>> {
-        // Ensure _sqlx_migrations exists
-        sqlx::query(
-            "CREATE TABLE IF NOT EXISTS _sqlx_migrations (
-                version BIGINT PRIMARY KEY,
-                description TEXT NOT NULL,
-                installed_on TIMESTAMPTZ NOT NULL DEFAULT now(),
-                success BOOLEAN NOT NULL DEFAULT TRUE,
-                checksum BYTEA NOT NULL,
-                execution_time BIGINT NOT NULL DEFAULT 0
-            )",
-        )
-        .execute(pool)
-        .await?;
-
-        let migrations = vec![
-            (1, "data", include_str!("../migrations/0001_data.sql")),
-            (
-                2,
-                "add minio url",
-                include_str!("../migrations/0002_add_minio_url.sql"),
-            ),
-            (3, "data", include_str!("../migrations/0003_data.sql")),
-        ];
-
-        for (version, description, sql) in migrations {
-            // Check if version is already applied
-            let row: Option<(bool,)> =
-                sqlx::query_as("SELECT EXISTS(SELECT 1 FROM _sqlx_migrations WHERE version = $1)")
-                    .bind(version)
-                    .fetch_optional(pool)
-                    .await?;
-
-            let already_applied = row.map(|r| r.0).unwrap_or(false);
-
-            if !already_applied {
-                println!("Applying migration {}: {}...", version, description);
-                let mut tx = pool.begin().await?;
-
-                // Use sqlx::raw_sql to execute a multi-statement raw SQL string instead of a single prepared statement
-                sqlx::raw_sql(sql).execute(&mut *tx).await?;
-
-                sqlx::query(
-                    "INSERT INTO _sqlx_migrations (version, description, checksum, success) 
-                     VALUES ($1, $2, $3, TRUE)",
-                )
-                .bind(version)
-                .bind(description)
-                .bind(&[0u8; 32][..]) // Use dummy checksum to bypass validation
-                .execute(&mut *tx)
-                .await?;
-
-                tx.commit().await?;
-                println!("Migration {} completed successfully!", version);
-            } else {
-                println!(
-                    "Migration {} already applied, skipping validation.",
-                    version
-                );
-            }
-        }
-        Ok(())
-    }
-
-    // match run_custom_migrations(&pool).await {
-    //     Ok(_) => println!("All migrations processed successfully!"),
-    //     Err(e) => eprintln!("Error during custom migrations: {}", e),
-    // }
 
     let static_dir = env::var("STATIC_DIR").unwrap_or_else(|_| "../frontend/build".to_string());
     let static_dir_path = std::path::PathBuf::from(&static_dir);
@@ -246,9 +178,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "/messages",
             get(get_message_id_sender_name_content_parent).post(post_message),
         )
-        // .route("/users", get(get_user_id_username))
-        // .route("/chats", post(post_chat)) // no more chats, so just post mesages
-        //
         .route("/password-set", post(set_password))
         .route("/minio-fetch", get(get_fetch_url))
         .route("/minio-post", get(get_put_url))
@@ -258,8 +187,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .merge(public_routes)
         .merge(protected_routes)
         .fallback_service(static_service) // 1. Register fallback first
-        .layer(socket_layer) // 2. Wrap everything with the socket layer
-        .layer(build_cors_layer()) // 4. Wrap with CORS as the outermost layer
+        .layer(Extension(io))
+        .layer(socket_layer)
+        .layer(build_cors_layer())
         .with_state(pool);
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:8081").await.unwrap();
@@ -757,13 +687,12 @@ async fn post_chat(
 pub async fn post_chat_participant(
     Extension(auth_user): Extension<AuthUser>,
     extract::State(pool): extract::State<PgPool>,
-    Json(payload): Json<ChatParticipant>,
+    Json(payload): Json<NewChatParticipant>,
 ) -> Json<Value> {
     // change hardcoded number of values
     let query = "INSERT INTO chat_participants (chat_id, user_name) VALUES ($1, $2) RETURNING *";
 
-    //// what is bound is wrong
-    let q = sqlx::query_as::<_, ChatParticipant>(&query)
+    let q = sqlx::query_as::<_, NewChatParticipant>(&query)
         .bind(payload.chat_id)
         .bind(payload.user_name);
 

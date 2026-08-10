@@ -187,8 +187,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .merge(public_routes)
         .merge(protected_routes)
         .fallback_service(static_service) // 1. Register fallback first
-        .layer(socket_layer) // 2. Wrap everything with the socket layer
-        .layer(build_cors_layer()) // 4. Wrap with CORS as the outermost layer
+        .layer(Extension(io))
+        .layer(socket_layer)
+        .layer(build_cors_layer())
         .with_state(pool);
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:8081").await.unwrap();

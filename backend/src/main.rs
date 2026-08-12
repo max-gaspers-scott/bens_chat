@@ -346,7 +346,7 @@ async fn get_message_id_sender_name_content_parent(
 //should check if the chat is with a user named "gemini" and no other users and if so post gemini
 //respoce
 
-//TODO: the funtion (and endpoint) has to much responsiblity
+//TODO: the function (and endpoint) has to much responsiblity
 //should have a sepret endpiont+handeler for posting root messages, maybe called create chat
 //
 async fn post_message(

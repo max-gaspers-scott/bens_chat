@@ -5,7 +5,8 @@ use image::{DynamicImage, Pixel, Rgba, RgbaImage};
 
 use reqwest::Client;
 use viuer::print;
-const BASE_URL: &str = "http://localhost:8081"; //9821
+
+const BASE_URL: &str = "https://bens-chat.team-stingray.com";
 #[derive(Debug, serde::Deserialize)]
 pub struct MessageResponce {
     pub payload: Vec<Message>,

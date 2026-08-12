@@ -4,5 +4,3 @@ pub mod user;
 pub use user::*;
 pub mod message_responce;
 pub use message_responce::*;
-pub mod message;
-pub use message::*;

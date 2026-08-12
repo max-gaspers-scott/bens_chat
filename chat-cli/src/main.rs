@@ -1,3 +1,5 @@
+mod structs;
+use crate::structs::*;
 use clap::builder::Str;
 use cool_cli_input::get_input;
 use futures_util::{FutureExt, StreamExt};
@@ -7,7 +9,6 @@ use inquire::{
     error::InquireResult,
     ui::{Color, RenderConfig, Styled},
 };
-use rand::RngExt;
 use reqwest::Response;
 use reqwest::{self, Client, Request};
 use serde::Deserialize;
@@ -26,8 +27,8 @@ use viuer::print;
 
 // should be in env, but this will work for now
 // const PORT: u32 = 8081;
-// const BASE_URL: &str = "http://localhost:9821"; //9821
-const BASE_URL: &str = "https://bens-chat.team-stingray.com";
+const BASE_URL: &str = "http://localhost:8081"; //9821
+// const BASE_URL: &str = "https://bens-chat.team-stingray.com";
 
 use std::sync::RwLock;
 
@@ -84,14 +85,6 @@ struct LoginPayload {
 enum LoginInfo {
     Loggedin { info: LoginPayload },
     NotLoggedin,
-}
-
-#[derive(serde::Serialize)]
-struct User {
-    pub name: String,
-    pub phone_number: Option<String>,
-    pub email: Option<String>,
-    pub password_hash: String,
 }
 
 struct Window {
@@ -320,23 +313,6 @@ impl Window {
             }
         }
     }
-}
-
-#[derive(Debug, serde::Deserialize)]
-struct MessageResponce {
-    payload: Vec<Message>,
-    status: String,
-}
-
-#[derive(Debug, serde::Deserialize)]
-struct Message {
-    #[serde(default)]
-    message_id: uuid::Uuid,
-    sender_name: String,
-    parent: Option<uuid::Uuid>,
-    content: SendibleContent,
-    #[serde(default)]
-    sent_at: chrono::DateTime<chrono::Utc>,
 }
 
 #[derive(Debug, serde::Deserialize)]

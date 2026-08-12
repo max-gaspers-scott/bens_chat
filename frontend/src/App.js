@@ -1,17 +1,17 @@
 import { io } from 'socket.io-client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import SignUp from './components/SignUp';
 import Login from './components/Login';
 import CreateChat from './components/CreateChat';
 import ChatList from './components/ChatList';
 import ChatView from './components/ChatView';
 import ResetPassword from './components/ResetPassword';
-import WebSocketTest from './components/WebSocketTest';
 import './App.css';
 import { api } from './api/api';
 
 const USER_STORAGE_KEY = 'currentUser';
 const DARK_THEME_KEY = 'darkTheme';
+const NOTIFICATIONS_ENABLED_KEY = 'notificationsEnabled';
 
 function readStoredUser() {
   const token = api.getToken();
@@ -35,17 +35,61 @@ function readStoredTheme() {
   return stored === 'true';
 }
 
+function readStoredNotificationsEnabled() {
+  if (typeof window === 'undefined' || !('Notification' in window)) {
+    return false;
+  }
+  return (
+    localStorage.getItem(NOTIFICATIONS_ENABLED_KEY) === 'true' &&
+    Notification.permission === 'granted'
+  );
+}
+
 function App() {
   const [currentUser, setCurrentUser] = useState(() => readStoredUser());
   const [selectedChatId, setSelectedChatId] = useState(null);
   const [view, setView] = useState(() => (readStoredUser() ? 'chat' : 'login')); // 'signup', 'login', 'chat', 'reset-password'
   const [darkTheme, setDarkTheme] = useState(() => readStoredTheme());
+  const [notificationsEnabled, setNotificationsEnabled] = useState(() =>
+    readStoredNotificationsEnabled()
+  );
+  const notificationsEnabledRef = useRef(notificationsEnabled);
 
   const toggleTheme = () => {
     const newTheme = !darkTheme;
     setDarkTheme(newTheme);
     localStorage.setItem(DARK_THEME_KEY, newTheme.toString());
   };
+
+  // Keep a ref in sync so the socket handler always sees the latest preference
+  useEffect(() => {
+    notificationsEnabledRef.current = notificationsEnabled;
+  }, [notificationsEnabled]);
+
+  const toggleNotifications = useCallback(async () => {
+    if (notificationsEnabled) {
+      setNotificationsEnabled(false);
+      localStorage.setItem(NOTIFICATIONS_ENABLED_KEY, 'false');
+      return;
+    }
+
+    if (!('Notification' in window)) {
+      alert('This browser does not support desktop notifications.');
+      return;
+    }
+
+    let permission = Notification.permission;
+    if (permission !== 'granted') {
+      permission = await Notification.requestPermission();
+    }
+
+    if (permission === 'granted') {
+      setNotificationsEnabled(true);
+      localStorage.setItem(NOTIFICATIONS_ENABLED_KEY, 'true');
+    } else {
+      alert('Notification permission was denied. Please enable it in your browser settings.');
+    }
+  }, [notificationsEnabled]);
 
   // Apply dark theme class to body
   useEffect(() => {
@@ -97,6 +141,22 @@ function App() {
       console.log('New message received via socket:', data);
       window.dispatchEvent(new CustomEvent('refreshChats'));
       window.dispatchEvent(new CustomEvent('refreshMessages', { detail: data }));
+
+      const message = data && data.data;
+      if (
+        notificationsEnabledRef.current &&
+        'Notification' in window &&
+        Notification.permission === 'granted' &&
+        message &&
+        message.sender_name !== currentUser.username
+      ) {
+        const content = message.content || {};
+        const body = content.text || (content.url ? 'Sent an image' : 'You have a new message');
+        new Notification(`New message from ${message.sender_name}`, {
+          body,
+          icon: '/favicon.ico',
+        });
+      }
     });
 
     return () => {
@@ -130,6 +190,17 @@ function App() {
         {currentUser && (
           <div className="user-info">
             <span>Logged in as: {currentUser.username}</span>
+            <button
+              onClick={toggleNotifications}
+              className="settings-btn"
+              title={
+                notificationsEnabled
+                  ? 'Disable push notifications'
+                  : 'Enable push notifications'
+              }
+            >
+              {notificationsEnabled ? '🔔 Notifications On' : '🔕 Notifications Off'}
+            </button>
             <button onClick={() => setView('reset-password')} className="settings-btn">
               Change Password
             </button>
@@ -184,7 +255,6 @@ function App() {
           </div>
         )}
       </main>
-      <WebSocketTest />
     </div>
   );
 }

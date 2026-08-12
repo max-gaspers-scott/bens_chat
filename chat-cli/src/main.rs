@@ -1,3 +1,5 @@
+mod structs;
+use crate::structs::*;
 use clap::builder::Str;
 use cool_cli_input::get_input;
 use futures_util::{FutureExt, StreamExt};
@@ -7,7 +9,6 @@ use inquire::{
     error::InquireResult,
     ui::{Color, RenderConfig, Styled},
 };
-use rand::RngExt;
 use reqwest::Response;
 use reqwest::{self, Client, Request};
 use serde::Deserialize;
@@ -26,8 +27,8 @@ use viuer::print;
 
 // should be in env, but this will work for now
 // const PORT: u32 = 8081;
-// const BASE_URL: &str = "http://localhost:9821"; //9821
-const BASE_URL: &str = "https://bens-chat.team-stingray.com";
+const BASE_URL: &str = "http://localhost:8081"; //9821
+// const BASE_URL: &str = "https://bens-chat.team-stingray.com";
 
 use std::sync::RwLock;
 
@@ -79,14 +80,6 @@ struct LoginPayload {
 enum LoginInfo {
     Loggedin { info: LoginPayload },
     NotLoggedin,
-}
-
-#[derive(serde::Serialize)]
-struct User {
-    pub name: String,
-    pub phone_number: Option<String>,
-    pub email: Option<String>,
-    pub password_hash: String,
 }
 
 struct Window {
@@ -177,21 +170,37 @@ impl Window {
         let content = serde_json::json!({
             "text": title,
         });
+        if title == "/exit" {
+            print!("{}[2J{}[1;1H", 27 as char, 27 as char);
+            return Action::GotoChats;
+        }
         let msg = SendMesage {
             sender_name: login_stuff.username.clone(),
             parent: None,
             content,
         };
 
-        match send_message(login_stuff, &msg).await {
-            Ok(_) => {}
-            Err(e) => println!("error sendimg message: {e}"),
+        let msg_id = match send_message(login_stuff, &msg).await {
+            Ok(PostMsgRes { data }) => data.message_id,
+            Err(e) => {
+                println!("error sendimg message: {e}");
+                return Action::GotoChats;
+            }
+        };
+
+        // add users to chat
+        //
+        let other_user_name = get_input("who do you want to chat with").trim().to_string();
+
+        let other_user = ChatParticipant {
+            chat_id: msg_id,
+            user_name: other_user_name,
+        };
+        match post_userchat(login_stuff, &other_user).await {
+            Ok(_) => println!("posted to user chats"),
+            Err(e) => println!("error adding a user to the chat"),
         }
 
-        if title == "/exit" {
-            print!("{}[2J{}[1;1H", 27 as char, 27 as char);
-            return Action::GotoChats;
-        }
         Action::MakeChat
     }
     async fn handel_login(&mut self) -> Action {
@@ -299,23 +308,6 @@ impl Window {
             }
         }
     }
-}
-
-#[derive(Debug, serde::Deserialize)]
-struct MessageResponce {
-    payload: Vec<Message>,
-    status: String,
-}
-
-#[derive(Debug, serde::Deserialize)]
-struct Message {
-    #[serde(default)]
-    message_id: uuid::Uuid,
-    sender_name: String,
-    parent: Option<uuid::Uuid>,
-    content: SendibleContent,
-    #[serde(default)]
-    sent_at: chrono::DateTime<chrono::Utc>,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -495,14 +487,42 @@ mod tests {
     }
 }
 
-async fn send_message(login: &LoginPayload, message: &SendMesage) -> Result<(), reqwest::Error> {
-    println!("running send message");
+#[derive(Deserialize, Debug)]
+struct PostMsgData {
+    message_id: uuid::Uuid,
+}
+#[derive(Deserialize, Debug)]
+struct PostMsgRes {
+    data: PostMsgData,
+}
+async fn send_message(
+    login: &LoginPayload,
+    message: &SendMesage,
+) -> Result<PostMsgRes, reqwest::Error> {
     let url = format!("{BASE_URL}/messages");
+    let client = reqwest::Client::new();
+
+    let response = client
+        .post(url)
+        .json(message)
+        .bearer_auth(login.token.clone())
+        .send()
+        .await?;
+
+    let parsed_res = response.json::<PostMsgRes>().await?;
+    Ok(parsed_res)
+}
+
+async fn post_userchat(
+    login: &LoginPayload,
+    chat_participant: &ChatParticipant,
+) -> Result<(), reqwest::Error> {
+    let url = format!("{BASE_URL}/user-chats");
     let client = reqwest::Client::new();
 
     match client
         .post(url)
-        .json(message)
+        .json(chat_participant)
         .bearer_auth(login.token.clone())
         .send()
         .await

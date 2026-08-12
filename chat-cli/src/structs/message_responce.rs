@@ -4,6 +4,7 @@ use termimad::{print_inline, print_text};
 use image::{DynamicImage, Pixel, Rgba, RgbaImage};
 
 use reqwest::Client;
+use viuer::print;
 const BASE_URL: &str = "http://localhost:8081"; //9821
 #[derive(Debug, serde::Deserialize)]
 pub struct MessageResponce {
@@ -25,8 +26,8 @@ pub struct Message {
 #[derive(Debug, serde::Deserialize)]
 #[serde(untagged)]
 pub enum SendibleContent {
-    Text(TextMessage),
     Img(ImgMessage),
+    Text(TextMessage),
     Title(TitleMessage),
 }
 
@@ -34,6 +35,7 @@ impl SendibleContent {
     pub async fn show(&self) {
         match self {
             Self::Text(t) => {
+                // println!("calling testMessage . show");
                 let _ = t.show().await;
             }
             Self::Img(i) => {
@@ -103,6 +105,8 @@ struct ImgMessage {
 
 impl MessageInterface for ImgMessage {
     async fn show(&self) {
+        println!("running image interface");
+
         let path = self.url.clone();
         let url = &format!("{BASE_URL}/minio-fetch?object_key={}", path);
 

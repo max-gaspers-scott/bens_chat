@@ -346,8 +346,8 @@ async fn get_message_id_sender_name_content_parent(
 //should check if the chat is with a user named "gemini" and no other users and if so post gemini
 //respoce
 
-//TODO: the function (and endpoint) has to much responsiblity
-//should have a sepret endpiont+handeler for posting root messages, maybe called create chat
+//TODO: the function (and endpoint) has too much responsibility
+//should have a separate endpoint+handler for posting root messages, maybe called create chat
 //
 async fn post_message(
     Extension(auth_user): Extension<AuthUser>,
@@ -362,7 +362,7 @@ async fn post_message(
         .unwrap_or("not_gemini");
     let gemint_text = text[0..min(text.len(), 7)].to_string();
     println!("test is: {gemint_text}");
-    println!("seeing if messages starts wtih gemini");
+    println!("seeing if messages starts with gemini");
     if &gemint_text == "@gemini" {
         println!("message starts with @gemini");
         let gem_res = match gemini(&payload.content["text"].to_string()).await {
@@ -386,7 +386,7 @@ async fn post_message(
         let post_gemini_res = q.fetch_one(&pool).await;
         match post_gemini_res {
             Ok(value) => {}
-            Err(e) => println!("error happend trying to post gemini responce: {e}"),
+            Err(e) => println!("error happened trying to post gemini response: {e}"),
         }
     }
 
@@ -451,8 +451,8 @@ async fn post_message(
             }
         };
 
-        //TODO: get rid of the consepts of chats from the DB entierly. a 1 to 1 onto mapping of
-        //messge id to another uuid is not helpfull
+        //TODO: get rid of the concepts of chats from the DB entirely. a 1 to 1 onto mapping of
+        //message id to another uuid is not helpful
         let chat_id = message.message_id;
 
         let participant_query =
@@ -563,8 +563,8 @@ async fn gemini(message: &str) -> Result<String, reqwest::Error> {
         // Deserialize the JSON response into our Rust struct
         let json_response: GeminiRespons = response.json().await?;
 
-        // TODO: should not return "" insted do better error handeling
-        // program should not continue with empty string is somthing goes wrong at this step
+        // TODO: should not return "" instead do better error handling
+        // program should not continue with empty string is something goes wrong at this step
         if let Some(candidate) = json_response.candidates.first() {
             if let Some(part) = candidate.content.parts.first() {
                 part.text.to_string()

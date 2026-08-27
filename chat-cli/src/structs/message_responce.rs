@@ -1,4 +1,5 @@
-use crate::get_current_login;
+use crate::{get_current_login, structs::message_responce::Chip::Red};
+use clap::builder::styling::AnsiColor::Yellow;
 use termimad::{print_inline, print_text};
 
 use image::{DynamicImage, Pixel, Rgba, RgbaImage};
@@ -30,6 +31,7 @@ pub enum SendibleContent {
     Img(ImgMessage),
     Text(TextMessage),
     Title(TitleMessage),
+    Con4(Con4),
 }
 
 impl SendibleContent {
@@ -45,6 +47,9 @@ impl SendibleContent {
             Self::Title(t) => {
                 let _ = t.show().await;
             }
+            Self::Con4(t) => {
+                let _ = t.show().await;
+            }
         }
     }
     pub fn get_content(&self) -> String {
@@ -52,6 +57,7 @@ impl SendibleContent {
             Self::Text(t) => t.text.clone(),
             Self::Img(i) => i.url.clone(),
             Self::Title(t) => t.title.clone(),
+            Self::Con4(b) => b.name.clone(),
         }
     }
 }
@@ -121,6 +127,38 @@ impl MessageInterface for ImgMessage {
         viuer::print(&img, &conf).expect("Image printing failed.");
     }
 }
+
+#[derive(Debug, serde::Deserialize)]
+struct Con4 {
+    name: String,
+    grid: Vec<Col>,
+}
+#[derive(Debug, serde::Deserialize)]
+struct Col {
+    row: Vec<Chip>,
+}
+#[derive(Debug, serde::Deserialize)]
+enum Chip {
+    Red,
+    Yellow,
+}
+impl MessageInterface for Con4 {
+    async fn show(&self) {
+        for col in &self.grid {
+            for e in &col.row {
+                match e {
+                    Chip::Red => {
+                        println!("X");
+                    }
+                    Chip::Yellow => {
+                        println!("O");
+                    }
+                }
+            }
+        }
+    }
+}
+
 async fn download_img_from_db(url: &str) -> DynamicImage {
     let login = get_current_login().expect("No current login payload found");
     let client = Client::new();

@@ -306,6 +306,16 @@ impl Window {
                     chat_id: Uuid::parse_str(input).unwrap(),
                 };
             }
+            if message.trim() == "/conn4" {
+                let mut buff = String::new();
+                println!("where do you want to start you connect for game");
+
+                std::io::stdin().read_line(&mut buff).unwrap();
+                let input = buff.trim();
+                return Action::GotoConversation {
+                    chat_id: Uuid::parse_str(input).unwrap(),
+                };
+            }
             match send_message(login_stuff, &msg).await {
                 Ok(_) => {}
                 Err(e) => print!("error sendimg message: {e}"),

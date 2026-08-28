@@ -30,6 +30,7 @@ pub enum SendibleContent {
     Img(ImgMessage),
     Text(TextMessage),
     Title(TitleMessage),
+    Con4(Connect4),
 }
 
 impl SendibleContent {
@@ -45,6 +46,9 @@ impl SendibleContent {
             Self::Title(t) => {
                 let _ = t.show().await;
             }
+            Self::Con4(t) => {
+                let _ = t.show().await;
+            }
         }
     }
     pub fn get_content(&self) -> String {
@@ -52,6 +56,7 @@ impl SendibleContent {
             Self::Text(t) => t.text.clone(),
             Self::Img(i) => i.url.clone(),
             Self::Title(t) => t.title.clone(),
+            Self::Con4(b) => b.name.clone(),
         }
     }
 }
@@ -121,6 +126,78 @@ impl MessageInterface for ImgMessage {
         viuer::print(&img, &conf).expect("Image printing failed.");
     }
 }
+
+#[derive(Debug, serde::Deserialize, serde::Serialize, Clone)]
+pub struct Connect4 {
+    name: String,
+    grid: Vec<Col>,
+}
+
+impl Connect4 {
+    pub fn new(name: String, pos: usize) -> Connect4 {
+        let mut begin = vec![Col::new(); pos - 1];
+        begin.push(Col::new_start(Chip::Red)); //red always starts
+
+        let end = vec![Col::new(); 7 - pos];
+        let total = [begin, end].concat();
+        Connect4 { name, grid: total }
+    }
+}
+
+#[derive(Debug, serde::Deserialize, serde::Serialize, Clone)]
+struct Col {
+    row: Vec<Chip>,
+}
+
+impl Col {
+    fn new() -> Col {
+        Col { row: Vec::new() }
+    }
+    fn new_start(chip: Chip) -> Col {
+        Col { row: vec![chip] }
+    }
+}
+#[derive(Debug, serde::Deserialize, serde::Serialize, Clone)]
+enum Chip {
+    Red,
+    Yellow,
+}
+
+impl MessageInterface for Connect4 {
+    async fn show(&self) {
+        let name = self.name;
+        println!("{name}");
+        // for col in &self.grid {
+        // for e in &col.row {
+        //     match e {
+        //         Chip::Red => {
+        //             println!("X");
+        //         }
+        //         Chip::Yellow => {
+        //             println!("O");
+        //         }
+        //     }
+        // }
+
+        for r in 0..6 {
+            for c in 0..6 {
+                let chip = self.grid.get(r).unwrap().row.get(c);
+                match chip {
+                    Some(c) => match c {
+                        Chip::Red => print!("R"),
+                        Chip::Yellow => print!("Y"),
+                    },
+                    None => print!("_"),
+                }
+                print!(" ");
+            }
+            println!("");
+        }
+    }
+
+    // }
+}
+
 async fn download_img_from_db(url: &str) -> DynamicImage {
     let login = get_current_login().expect("No current login payload found");
     let client = Client::new();

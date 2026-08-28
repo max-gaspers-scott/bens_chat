@@ -176,7 +176,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .route(
             "/messages",
-            get(get_message_id_sender_name_content_parent).post(post_message),
+            get(get_message_id_sender_name_content_parent)
+                .post(post_message)
+                .patch(update_message),
         )
         .route("/password-set", post(set_password))
         .route("/minio-fetch", get(get_fetch_url))
@@ -196,6 +198,32 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     axum::serve(listener, app).await.unwrap();
     Ok(())
+}
+
+#[derive(Debug, Deserialize)]
+struct MessageName {
+    name: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct UpdateMessage {
+    content: serde_json::Value,
+}
+struct SendMessage {}
+async fn update_message(
+    extract::State(pool): extract::State<PgPool>,
+    Extension(auth_user): Extension<AuthUser>,
+    Query(name): Query<MessageName>,
+    Json(content): Json<UpdateMessage>,
+) {
+    //TODO: should not be all palces where name = that-name,
+    //it should be jsut the most resent message with that naem.
+    //should probaby order by date first
+    let query = "UPDATE messages SET content $1 WHERE content->>'name' = $2;";
+    let q = sqlx::query_as::<_, Message>(&query)
+        .bind(name)
+        .bind(content);
+    q.fetch(&pool);
 }
 
 async fn get_users_chats(

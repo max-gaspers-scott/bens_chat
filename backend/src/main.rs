@@ -624,7 +624,7 @@ pub async fn post_user(
         Err(e) => return Json(json!({"res": format!("error: {}", e)})),
     };
     // change hardcoded number of values
-    let query = "INSERT INTO users (name, phone_number, email, passwrod_hash) VALUES ($1, $2, $3, $4) RETURNING name, phone_number, email, passwrod_hash AS password_hash";
+    let query = "INSERT INTO users (name, phone_number, email, password_hash) VALUES ($1, $2, $3, $4) RETURNING name, phone_number, email, password_hash";
 
     //// what is bound is wrong
     let q = sqlx::query_as::<_, User>(&query)
@@ -645,7 +645,7 @@ async fn login_user(
     extract::State(pool): extract::State<PgPool>,
     Json(payload): Json<LoginRequest>,
 ) -> Json<Value> {
-    let result = sqlx::query_as::<_, User>("SELECT name, phone_number, email, passwrod_hash AS password_hash FROM users WHERE name = $1")
+    let result = sqlx::query_as::<_, User>("SELECT name, phone_number, email, password_hash FROM users WHERE name = $1")
         .bind(&payload.username)
         .fetch_optional(&pool)
         .await;
@@ -736,7 +736,7 @@ async fn get_user_id_username(
     match_val: Query<UsernameQuery>,
     extract::State(pool): extract::State<PgPool>,
 ) -> Json<Value> {
-    let result = sqlx::query_as::<_, User>("SELECT name, phone_number, email, passwrod_hash AS password_hash FROM users WHERE name = $1")
+    let result = sqlx::query_as::<_, User>("SELECT name, phone_number, email, password_hash FROM users WHERE name = $1")
         .bind(match_val.username.clone())
         .fetch_optional(&pool)
         .await;

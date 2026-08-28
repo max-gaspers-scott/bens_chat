@@ -18,7 +18,7 @@ pub struct Message {
     #[serde(default)]
     pub message_id: uuid::Uuid,
     pub sender_name: String,
-    pub parent: Option<uuid::Uuid>,
+    pub parent_id: Option<uuid::Uuid>,
     pub content: SendibleContent,
     #[serde(default)]
     pub sent_at: chrono::DateTime<chrono::Utc>,
@@ -69,7 +69,7 @@ struct Img {
 #[derive(Debug, serde::Serialize)]
 pub struct SendMesage {
     pub sender_name: String,
-    pub parent: Option<uuid::Uuid>,
+    pub parent_id: Option<uuid::Uuid>,
     pub content: serde_json::Value,
 }
 
@@ -165,7 +165,7 @@ enum Chip {
 
 impl MessageInterface for Connect4 {
     async fn show(&self) {
-        let name = self.name;
+        let name = &self.name;
         println!("{name}");
         // for col in &self.grid {
         // for e in &col.row {

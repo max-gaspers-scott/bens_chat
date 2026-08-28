@@ -219,10 +219,10 @@ async fn update_message(
     //TODO: should not be all palces where name = that-name,
     //it should be jsut the most resent message with that naem.
     //should probaby order by date first
-    let query = "UPDATE messages SET content $1 WHERE content->>'name' = $2;";
+    let query = "UPDATE messages SET content = $1 WHERE content->>'name' = $2;";
     let q = sqlx::query_as::<_, Message>(&query)
-        .bind(name)
-        .bind(content);
+        .bind(content.content)
+        .bind(name.name);
     q.fetch(&pool);
 }
 
@@ -231,10 +231,10 @@ async fn get_users_chats(
     Extension(auth_user): Extension<AuthUser>,
     Query(username): Query<UsernameQuery>,
 ) -> Json<Value> {
-    let query = "SELECT m.message_id, m.sender_name, m.parent, m.content, m.sent_at \
+    let query = "SELECT m.message_id, m.sender_name, m.parent_id, m.content, m.sent_at \
                  FROM messages m \
                  JOIN chat_participants cp ON cp.chat_id = m.message_id \
-                 WHERE cp.user_name = $1 AND m.parent IS NULL";
+                 WHERE cp.user_name = $1 AND m.parent_id IS NULL";
     let q = sqlx::query_as::<_, Message>(&query).bind(username.username.clone());
 
     match q.fetch_all(&pool).await {
@@ -268,7 +268,7 @@ async fn is_user_in_chat(pool: &PgPool, name: &str, chat_id: &Uuid) -> Result<bo
         WITH RECURSIVE chat_tree AS (
             SELECT
                 m.message_id,
-                m.parent,
+                m.parent_id,
                 m.message_id as original_message_id
             FROM messages m
             WHERE m.message_id = $2 -- Start with the given message_id
@@ -277,27 +277,27 @@ async fn is_user_in_chat(pool: &PgPool, name: &str, chat_id: &Uuid) -> Result<bo
 
             SELECT
                 m_rec.message_id,
-                m_rec.parent,
+                m_rec.parent_id,
                 ct.original_message_id
             FROM messages m_rec
-            JOIN chat_tree ct ON m_rec.message_id = ct.parent
+            JOIN chat_tree ct ON m_rec.message_id = ct.parent_id
         )
         SELECT EXISTS (
             SELECT 1
             FROM chat_participants cp
             JOIN (
                 WITH RECURSIVE chat_ancestry AS (
-                    SELECT message_id, parent
+                    SELECT message_id, parent_id
                     FROM messages
                     WHERE message_id = $2
                     UNION ALL
-                    SELECT m.message_id, m.parent
+                    SELECT m.message_id, m.parent_id
                     FROM messages m
-                    JOIN chat_ancestry ca ON m.message_id = ca.parent
+                    JOIN chat_ancestry ca ON m.message_id = ca.parent_id
                 )
                 SELECT message_id
                 FROM chat_ancestry
-                WHERE parent IS NULL
+                WHERE parent_id IS NULL
             ) AS root_message ON cp.chat_id = root_message.message_id
             WHERE cp.user_name = $1
         )
@@ -342,7 +342,7 @@ async fn get_message_id_sender_name_content_parent(
         Err(e) => return Json(json!({"status": "error", "error": e.to_string()})),
     }
 
-    let query = "SELECT * FROM messages WHERE parent = $1";
+    let query = "SELECT * FROM messages WHERE parent_id = $1";
     let q = sqlx::query_as::<_, Message>(&query).bind(match_val.parent.clone());
 
     match q.fetch_all(&pool).await {
@@ -401,14 +401,13 @@ async fn post_message(
         let content = serde_json::json!({
             "text": gem_res,
         });
-        let query =
-            "INSERT INTO messages (sender_name, parent, content) VALUES ($1, $2, $3) RETURNING *";
+        let query = "INSERT INTO messages (sender_name, parent_id, content) VALUES ($1, $2, $3) RETURNING *";
         let user_copy = auth_user.username.clone();
 
         let q = sqlx::query_as::<_, Message>(query)
             .bind(user_copy) // why not gemini a
             // hardcoded uuid of gemini??
-            .bind(payload.parent)
+            .bind(payload.parent_id)
             .bind(content);
 
         let post_gemini_res = q.fetch_one(&pool).await;
@@ -420,20 +419,19 @@ async fn post_message(
 
     // change hardcoded number of values
     let query =
-        "INSERT INTO messages (sender_name, parent, content) VALUES ($1, $2, $3) RETURNING *";
-    if let Some(parent) = payload.parent {
+        "INSERT INTO messages (sender_name, parent_id, content) VALUES ($1, $2, $3) RETURNING *";
+    if let Some(parent) = payload.parent_id {
         // match is_user_in_chat(&pool, &auth_user.username, &parent).await {
         //     Ok(true) => {}
         //     Ok(false) => return Json(json!({"status": "error", "error": "Forbidden"})),
         //     Err(e) => return Json(json!({"status": "error", "error": e.to_string()})),
         // }
 
-        let query =
-            "INSERT INTO messages (sender_name, parent, content) VALUES ($1, $2, $3) RETURNING *";
+        let query = "INSERT INTO messages (sender_name, parent_id, content) VALUES ($1, $2, $3) RETURNING *";
 
         let q = sqlx::query_as::<_, Message>(&query)
             .bind(auth_user.username)
-            .bind(payload.parent)
+            .bind(payload.parent_id)
             .bind(payload.content);
 
         let result = q.fetch_one(&pool).await;
@@ -463,8 +461,7 @@ async fn post_message(
             Err(e) => return Json(json!({"res": format!("error: {}", e)})),
         };
 
-        let message_query =
-            "INSERT INTO messages (sender_name, parent, content) VALUES ($1, NULL, $2) RETURNING *";
+        let message_query = "INSERT INTO messages (sender_name, parent_id, content) VALUES ($1, NULL, $2) RETURNING *";
         let message_result = sqlx::query_as::<_, Message>(&message_query)
             .bind(&auth_user.username)
             .bind(&payload.content)
@@ -624,7 +621,7 @@ pub async fn post_user(
         Err(e) => return Json(json!({"res": format!("error: {}", e)})),
     };
     // change hardcoded number of values
-    let query = "INSERT INTO users (name, phone_number, email, passwrod_hash) VALUES ($1, $2, $3, $4) RETURNING name, phone_number, email, passwrod_hash AS password_hash";
+    let query = "INSERT INTO users (name, phone_number, email, password_hash) VALUES ($1, $2, $3, $4) RETURNING name, phone_number, email, password_hash";
 
     //// what is bound is wrong
     let q = sqlx::query_as::<_, User>(&query)
@@ -645,10 +642,12 @@ async fn login_user(
     extract::State(pool): extract::State<PgPool>,
     Json(payload): Json<LoginRequest>,
 ) -> Json<Value> {
-    let result = sqlx::query_as::<_, User>("SELECT name, phone_number, email, passwrod_hash AS password_hash FROM users WHERE name = $1")
-        .bind(&payload.username)
-        .fetch_optional(&pool)
-        .await;
+    let result = sqlx::query_as::<_, User>(
+        "SELECT name, phone_number, email, password_hash FROM users WHERE name = $1",
+    )
+    .bind(&payload.username)
+    .fetch_optional(&pool)
+    .await;
 
     match result {
         Ok(Some(user)) if verify(&payload.password, &user.password_hash).unwrap_or(false) => {
@@ -736,10 +735,12 @@ async fn get_user_id_username(
     match_val: Query<UsernameQuery>,
     extract::State(pool): extract::State<PgPool>,
 ) -> Json<Value> {
-    let result = sqlx::query_as::<_, User>("SELECT name, phone_number, email, passwrod_hash AS password_hash FROM users WHERE name = $1")
-        .bind(match_val.username.clone())
-        .fetch_optional(&pool)
-        .await;
+    let result = sqlx::query_as::<_, User>(
+        "SELECT name, phone_number, email, password_hash FROM users WHERE name = $1",
+    )
+    .bind(match_val.username.clone())
+    .fetch_optional(&pool)
+    .await;
 
     match result {
         Ok(Some(user)) => Json(json!({

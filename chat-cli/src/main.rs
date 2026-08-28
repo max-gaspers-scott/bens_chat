@@ -180,7 +180,7 @@ impl Window {
         }
         let msg = SendMesage {
             sender_name: login_stuff.username.clone(),
-            parent: None,
+            parent_id: None,
             content,
         };
 
@@ -273,7 +273,7 @@ impl Window {
         }
         .unwrap();
         loop {
-            get_and_show_msg(&login_stuff, &chat_id).await;
+            let mut messages = get_and_show_msg(&login_stuff, &chat_id).await;
             println!("------------------");
             let message = get_input("your message: ");
 
@@ -282,12 +282,12 @@ impl Window {
             });
             let msg = SendMesage {
                 sender_name: login_stuff.username.clone(),
-                parent: Some(chat_id),
+                parent_id: Some(chat_id),
                 content,
             };
 
             if message.trim() == "/update" {
-                get_and_show_msg(&login_stuff, &chat_id).await;
+                messages = get_and_show_msg(&login_stuff, &chat_id).await;
                 continue;
             }
 
@@ -298,13 +298,18 @@ impl Window {
             }
             if message.trim() == "/subchat" {
                 let mut buff = String::new();
-                println!("what chat do you want to see");
+                println!("what sub chat do you want to see");
 
                 std::io::stdin().read_line(&mut buff).unwrap();
                 let input = buff.trim();
-                return Action::GotoConversation {
-                    chat_id: Uuid::parse_str(input).unwrap(),
-                };
+                for m in messages {
+                    let cont = m.content.get_content();
+                    let id = m.message_id;
+                    if cont == input {
+                        return Action::GotoConversation { chat_id: id };
+                    }
+                }
+                println!("message not found");
             }
             if message.trim() == "/newConn4" {
                 let mut buff = String::new();
@@ -348,7 +353,6 @@ async fn get_messages(
     login: &LoginPayload,
     chat_id: &Uuid,
 ) -> Result<Vec<Message>, reqwest::Error> {
-    println!("chat-id id: {:?}", chat_id);
     let url = format!("{BASE_URL}/messages?parent={}", chat_id);
 
     let client = Client::new();
@@ -359,7 +363,6 @@ async fn get_messages(
         .send()
         .await?;
     let text = res.text().await?;
-    println!("DEBUG get_messages raw body: {}", text);
     let message_responce: MessageResponce = serde_json::from_str(&text)
         .map_err(|e| {
             println!("JSON parsing error in get_messages: {}", e);
@@ -452,22 +455,30 @@ async fn post_userchat(
     Ok(())
 }
 
-async fn show_messages(messages: &[Message]) -> Result<(), reqwest::Error> {
+async fn show_messages(messages: &[Message], login: &LoginPayload) -> Result<(), reqwest::Error> {
     print!("{}[2J{}[1;1H", 27 as char, 27 as char);
     for m in messages {
+        //TODO: n+1 problem, shoudl fix on backend
+        let messages = get_messages(login, &m.message_id).await.unwrap();
+
         if m.sender_name == get_current_login().unwrap().username {
             print!("you: ");
         } else {
             print!("{}: ", m.sender_name);
         }
         m.content.show().await;
+        if !messages.is_empty() {
+            println!("\t-> has sub chat");
+        }
+        println!();
     }
     Ok(())
 }
 
-async fn get_and_show_msg(login_stuff: &LoginPayload, chat_id: &Uuid) {
+async fn get_and_show_msg(login_stuff: &LoginPayload, chat_id: &Uuid) -> Vec<Message> {
     let messages = get_messages(&login_stuff, &chat_id).await.unwrap();
-    show_messages(&messages).await.unwrap();
+    show_messages(&messages, &login_stuff).await.unwrap();
+    messages
 }
 
 #[tokio::main]

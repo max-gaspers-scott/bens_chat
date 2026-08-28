@@ -231,10 +231,10 @@ async fn get_users_chats(
     Extension(auth_user): Extension<AuthUser>,
     Query(username): Query<UsernameQuery>,
 ) -> Json<Value> {
-    let query = "SELECT m.message_id, m.sender_name, m.parent, m.content, m.sent_at \
+    let query = "SELECT m.message_id, m.sender_name, m.parent_id, m.content, m.sent_at \
                  FROM messages m \
                  JOIN chat_participants cp ON cp.chat_id = m.message_id \
-                 WHERE cp.user_name = $1 AND m.parent IS NULL";
+                 WHERE cp.user_name = $1 AND m.parent_id IS NULL";
     let q = sqlx::query_as::<_, Message>(&query).bind(username.username.clone());
 
     match q.fetch_all(&pool).await {
@@ -268,7 +268,7 @@ async fn is_user_in_chat(pool: &PgPool, name: &str, chat_id: &Uuid) -> Result<bo
         WITH RECURSIVE chat_tree AS (
             SELECT
                 m.message_id,
-                m.parent,
+                m.parent_id,
                 m.message_id as original_message_id
             FROM messages m
             WHERE m.message_id = $2 -- Start with the given message_id
@@ -277,27 +277,27 @@ async fn is_user_in_chat(pool: &PgPool, name: &str, chat_id: &Uuid) -> Result<bo
 
             SELECT
                 m_rec.message_id,
-                m_rec.parent,
+                m_rec.parent_id,
                 ct.original_message_id
             FROM messages m_rec
-            JOIN chat_tree ct ON m_rec.message_id = ct.parent
+            JOIN chat_tree ct ON m_rec.message_id = ct.parent_id
         )
         SELECT EXISTS (
             SELECT 1
             FROM chat_participants cp
             JOIN (
                 WITH RECURSIVE chat_ancestry AS (
-                    SELECT message_id, parent
+                    SELECT message_id, parent_id
                     FROM messages
                     WHERE message_id = $2
                     UNION ALL
-                    SELECT m.message_id, m.parent
+                    SELECT m.message_id, m.parent_id
                     FROM messages m
-                    JOIN chat_ancestry ca ON m.message_id = ca.parent
+                    JOIN chat_ancestry ca ON m.message_id = ca.parent_id
                 )
                 SELECT message_id
                 FROM chat_ancestry
-                WHERE parent IS NULL
+                WHERE parent_id IS NULL
             ) AS root_message ON cp.chat_id = root_message.message_id
             WHERE cp.user_name = $1
         )
@@ -342,7 +342,7 @@ async fn get_message_id_sender_name_content_parent(
         Err(e) => return Json(json!({"status": "error", "error": e.to_string()})),
     }
 
-    let query = "SELECT * FROM messages WHERE parent = $1";
+    let query = "SELECT * FROM messages WHERE parent_id = $1";
     let q = sqlx::query_as::<_, Message>(&query).bind(match_val.parent.clone());
 
     match q.fetch_all(&pool).await {

@@ -1,5 +1,4 @@
-use crate::{get_current_login, structs::message_responce::Chip::Red};
-use clap::builder::styling::AnsiColor::Yellow;
+use crate::get_current_login;
 use termimad::{print_inline, print_text};
 
 use image::{DynamicImage, Pixel, Rgba, RgbaImage};
@@ -31,7 +30,7 @@ pub enum SendibleContent {
     Img(ImgMessage),
     Text(TextMessage),
     Title(TitleMessage),
-    Con4(Con4),
+    Con4(Connect4),
 }
 
 impl SendibleContent {
@@ -128,35 +127,75 @@ impl MessageInterface for ImgMessage {
     }
 }
 
-#[derive(Debug, serde::Deserialize)]
-struct Con4 {
+#[derive(Debug, serde::Deserialize, serde::Serialize, Clone)]
+pub struct Connect4 {
     name: String,
     grid: Vec<Col>,
 }
-#[derive(Debug, serde::Deserialize)]
+
+impl Connect4 {
+    pub fn new(name: String, pos: usize) -> Connect4 {
+        let mut begin = vec![Col::new(); pos - 1];
+        begin.push(Col::new_start(Chip::Red)); //red always starts
+
+        let end = vec![Col::new(); 7 - pos];
+        let total = [begin, end].concat();
+        Connect4 { name, grid: total }
+    }
+}
+
+#[derive(Debug, serde::Deserialize, serde::Serialize, Clone)]
 struct Col {
     row: Vec<Chip>,
 }
-#[derive(Debug, serde::Deserialize)]
+
+impl Col {
+    fn new() -> Col {
+        Col { row: Vec::new() }
+    }
+    fn new_start(chip: Chip) -> Col {
+        Col { row: vec![chip] }
+    }
+}
+#[derive(Debug, serde::Deserialize, serde::Serialize, Clone)]
 enum Chip {
     Red,
     Yellow,
 }
-impl MessageInterface for Con4 {
+
+impl MessageInterface for Connect4 {
     async fn show(&self) {
-        for col in &self.grid {
-            for e in &col.row {
-                match e {
-                    Chip::Red => {
-                        println!("X");
-                    }
-                    Chip::Yellow => {
-                        println!("O");
-                    }
+        let name = self.name;
+        println!("{name}");
+        // for col in &self.grid {
+        // for e in &col.row {
+        //     match e {
+        //         Chip::Red => {
+        //             println!("X");
+        //         }
+        //         Chip::Yellow => {
+        //             println!("O");
+        //         }
+        //     }
+        // }
+
+        for r in 0..6 {
+            for c in 0..6 {
+                let chip = self.grid.get(r).unwrap().row.get(c);
+                match chip {
+                    Some(c) => match c {
+                        Chip::Red => print!("R"),
+                        Chip::Yellow => print!("Y"),
+                    },
+                    None => print!("_"),
                 }
+                print!(" ");
             }
+            println!("");
         }
     }
+
+    // }
 }
 
 async fn download_img_from_db(url: &str) -> DynamicImage {

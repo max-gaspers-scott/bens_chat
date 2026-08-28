@@ -1,5 +1,5 @@
 mod structs;
-use crate::structs::*;
+use crate::structs::{SendibleContent::Con4, message_responce::Connect4, *};
 use clap::builder::Str;
 use cool_cli_input::get_input;
 use futures_util::{FutureExt, StreamExt};
@@ -306,15 +306,35 @@ impl Window {
                     chat_id: Uuid::parse_str(input).unwrap(),
                 };
             }
+            if message.trim() == "/newConn4" {
+                let mut buff = String::new();
+                println!("where do you want to start you connect for game");
+
+                std::io::stdin().read_line(&mut buff).unwrap();
+                let input = buff.trim();
+                let new_bard = Connect4::new(String::from("new game"), 4);
+                let board_messge = SendMesage {
+                    content: serde_json::to_value(new_bard).unwrap(),
+                    ..msg
+                };
+
+                send_message(login_stuff, &board_messge).await;
+                continue;
+            }
             if message.trim() == "/conn4" {
                 let mut buff = String::new();
                 println!("where do you want to start you connect for game");
 
                 std::io::stdin().read_line(&mut buff).unwrap();
                 let input = buff.trim();
-                return Action::GotoConversation {
-                    chat_id: Uuid::parse_str(input).unwrap(),
+                let new_bard = Connect4::new(String::from("new game"), 4);
+                let board_messge = SendMesage {
+                    content: serde_json::to_value(new_bard).unwrap(),
+                    ..msg
                 };
+
+                send_message(login_stuff, &board_messge).await;
+                continue;
             }
             match send_message(login_stuff, &msg).await {
                 Ok(_) => {}

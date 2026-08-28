@@ -165,7 +165,7 @@ enum Chip {
 
 impl MessageInterface for Connect4 {
     async fn show(&self) {
-        let name = self.name;
+        let name = &self.name;
         println!("{name}");
         // for col in &self.grid {
         // for e in &col.row {

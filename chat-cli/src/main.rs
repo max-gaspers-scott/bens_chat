@@ -180,7 +180,7 @@ impl Window {
         }
         let msg = SendMesage {
             sender_name: login_stuff.username.clone(),
-            parent: None,
+            parent_id: None,
             content,
         };
 
@@ -282,7 +282,7 @@ impl Window {
             });
             let msg = SendMesage {
                 sender_name: login_stuff.username.clone(),
-                parent: Some(chat_id),
+                parent_id: Some(chat_id),
                 content,
             };
 

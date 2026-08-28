@@ -219,10 +219,10 @@ async fn update_message(
     //TODO: should not be all palces where name = that-name,
     //it should be jsut the most resent message with that naem.
     //should probaby order by date first
-    let query = "UPDATE messages SET content $1 WHERE content->>'name' = $2;";
+    let query = "UPDATE messages SET content = $1 WHERE content->>'name' = $2;";
     let q = sqlx::query_as::<_, Message>(&query)
-        .bind(name)
-        .bind(content);
+        .bind(content.content)
+        .bind(name.name);
     q.fetch(&pool);
 }
 
@@ -401,14 +401,13 @@ async fn post_message(
         let content = serde_json::json!({
             "text": gem_res,
         });
-        let query =
-            "INSERT INTO messages (sender_name, parent, content) VALUES ($1, $2, $3) RETURNING *";
+        let query = "INSERT INTO messages (sender_name, parent_id, content) VALUES ($1, $2, $3) RETURNING *";
         let user_copy = auth_user.username.clone();
 
         let q = sqlx::query_as::<_, Message>(query)
             .bind(user_copy) // why not gemini a
             // hardcoded uuid of gemini??
-            .bind(payload.parent)
+            .bind(payload.parent_id)
             .bind(content);
 
         let post_gemini_res = q.fetch_one(&pool).await;
@@ -420,20 +419,19 @@ async fn post_message(
 
     // change hardcoded number of values
     let query =
-        "INSERT INTO messages (sender_name, parent, content) VALUES ($1, $2, $3) RETURNING *";
-    if let Some(parent) = payload.parent {
+        "INSERT INTO messages (sender_name, parent_id, content) VALUES ($1, $2, $3) RETURNING *";
+    if let Some(parent) = payload.parent_id {
         // match is_user_in_chat(&pool, &auth_user.username, &parent).await {
         //     Ok(true) => {}
         //     Ok(false) => return Json(json!({"status": "error", "error": "Forbidden"})),
         //     Err(e) => return Json(json!({"status": "error", "error": e.to_string()})),
         // }
 
-        let query =
-            "INSERT INTO messages (sender_name, parent, content) VALUES ($1, $2, $3) RETURNING *";
+        let query = "INSERT INTO messages (sender_name, parent_id, content) VALUES ($1, $2, $3) RETURNING *";
 
         let q = sqlx::query_as::<_, Message>(&query)
             .bind(auth_user.username)
-            .bind(payload.parent)
+            .bind(payload.parent_id)
             .bind(payload.content);
 
         let result = q.fetch_one(&pool).await;
@@ -463,8 +461,7 @@ async fn post_message(
             Err(e) => return Json(json!({"res": format!("error: {}", e)})),
         };
 
-        let message_query =
-            "INSERT INTO messages (sender_name, parent, content) VALUES ($1, NULL, $2) RETURNING *";
+        let message_query = "INSERT INTO messages (sender_name, parent_id, content) VALUES ($1, NULL, $2) RETURNING *";
         let message_result = sqlx::query_as::<_, Message>(&message_query)
             .bind(&auth_user.username)
             .bind(&payload.content)
@@ -645,10 +642,12 @@ async fn login_user(
     extract::State(pool): extract::State<PgPool>,
     Json(payload): Json<LoginRequest>,
 ) -> Json<Value> {
-    let result = sqlx::query_as::<_, User>("SELECT name, phone_number, email, password_hash FROM users WHERE name = $1")
-        .bind(&payload.username)
-        .fetch_optional(&pool)
-        .await;
+    let result = sqlx::query_as::<_, User>(
+        "SELECT name, phone_number, email, password_hash FROM users WHERE name = $1",
+    )
+    .bind(&payload.username)
+    .fetch_optional(&pool)
+    .await;
 
     match result {
         Ok(Some(user)) if verify(&payload.password, &user.password_hash).unwrap_or(false) => {
@@ -736,10 +735,12 @@ async fn get_user_id_username(
     match_val: Query<UsernameQuery>,
     extract::State(pool): extract::State<PgPool>,
 ) -> Json<Value> {
-    let result = sqlx::query_as::<_, User>("SELECT name, phone_number, email, password_hash FROM users WHERE name = $1")
-        .bind(match_val.username.clone())
-        .fetch_optional(&pool)
-        .await;
+    let result = sqlx::query_as::<_, User>(
+        "SELECT name, phone_number, email, password_hash FROM users WHERE name = $1",
+    )
+    .bind(match_val.username.clone())
+    .fetch_optional(&pool)
+    .await;
 
     match result {
         Ok(Some(user)) => Json(json!({

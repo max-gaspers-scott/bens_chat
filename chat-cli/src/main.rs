@@ -4,7 +4,7 @@ use clap::builder::Str;
 use cool_cli_input::get_input;
 use futures_util::{FutureExt, StreamExt};
 use inquire::{
-    Editor, Text,
+    Editor, Text, TextPromptAction,
     error::InquireResult,
     ui::{Color, RenderConfig, Styled},
 };
@@ -302,7 +302,7 @@ impl Window {
 
                 std::io::stdin().read_line(&mut buff).unwrap();
                 let input = buff.trim();
-                for m in messages {
+                for m in &messages {
                     let cont = m.content.get_content();
                     let id = m.message_id;
                     if cont == input {
@@ -317,7 +317,8 @@ impl Window {
 
                 std::io::stdin().read_line(&mut buff).unwrap();
                 let input = buff.trim();
-                let new_bard = Connect4::new(String::from("new game"), 4);
+                let num = input.parse().expect("not an integer");
+                let new_bard = Connect4::new(String::from("new game"), num);
                 let board_messge = SendMesage {
                     content: serde_json::to_value(new_bard).unwrap(),
                     ..msg
@@ -326,21 +327,7 @@ impl Window {
                 send_message(login_stuff, &board_messge).await;
                 continue;
             }
-            if message.trim() == "/conn4" {
-                let mut buff = String::new();
-                println!("where do you want to start you connect for game");
 
-                std::io::stdin().read_line(&mut buff).unwrap();
-                let input = buff.trim();
-                let new_bard = Connect4::new(String::from("new game"), 4);
-                let board_messge = SendMesage {
-                    content: serde_json::to_value(new_bard).unwrap(),
-                    ..msg
-                };
-
-                send_message(login_stuff, &board_messge).await;
-                continue;
-            }
             if message.trim() == "/update-message" {
                 let mut name_buff = String::new();
                 println!("what was the name of the message to update");
@@ -358,6 +345,51 @@ impl Window {
 
                 let update_res =
                     update_message(login_stuff, &content, String::from(msg_name)).await;
+                println!("messge name: {msg_name}");
+                println!("new text: {input}");
+
+                println!("contenet: {:?}", content);
+
+                match update_res {
+                    Ok(_) => {}
+                    Err(e) => println!("error updeteing message: {e}"),
+                }
+
+                continue;
+            }
+            if message.trim() == "/update-board" {
+                let mut name_buff = String::new();
+                println!("what was the name of the message to update");
+                std::io::stdin().read_line(&mut name_buff).unwrap();
+                let msg_name = name_buff.trim();
+
+                let mut buff = String::new();
+
+                println!("pos");
+                std::io::stdin().read_line(&mut buff).unwrap();
+                let input = buff.trim();
+
+                //TODO: bad code
+                let mut old_bard = Connect4::new(String::from("temp"), 1);
+                for m in &messages {
+                    //TODO: get_content should be called stringify or similar
+                    let cont = m.content.get_content();
+                    let id = m.message_id;
+                    if cont == msg_name {
+                        let old_board = match m.content {
+                            SendibleContent::Con4(ref c) => c,
+                            _ => panic!(), //TODO: shoudl retry on fialer
+                        };
+                        break;
+                    }
+                }
+                let testconn = Connect4::new(String::from("temp"), 5);
+                let content = serde_json::json!({
+                      "content": json!(testconn),
+                });
+
+                let update_res =
+                    update_message(login_stuff, &content, String::from("new game")).await;
                 println!("messge name: {msg_name}");
                 println!("new text: {input}");
 

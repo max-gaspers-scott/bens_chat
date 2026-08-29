@@ -215,15 +215,40 @@ async fn update_message(
     Extension(auth_user): Extension<AuthUser>,
     Query(name): Query<MessageName>,
     Json(content): Json<UpdateMessage>,
-) {
+) -> Json<Value> {
     //TODO: should not be all palces where name = that-name,
     //it should be jsut the most resent message with that naem.
     //should probaby order by date first
-    let query = "UPDATE messages SET content = $1 WHERE content->>'name' = $2;";
-    let q = sqlx::query_as::<_, Message>(&query)
+    println!("inside update func");
+
+    // may want this but not for gameboards
+    //       AND sender_name = $3
+    let query = r#"
+ UPDATE messages
+  SET content = $1
+  WHERE message_id = (
+      SELECT message_id
+      FROM messages
+      WHERE content->>'text' = $2
+      ORDER BY sent_at DESC
+      LIMIT 1
+  );
+"#;
+
+    //UPDATE messages SET content = $1 WHERE content->>'text' = $2 ORDER BY sent_at DESC LIMIT 1;";
+    let result = sqlx::query(&query)
         .bind(content.content)
-        .bind(name.name);
-    q.fetch(&pool);
+        .bind(&name.name)
+        .bind(auth_user.username)
+        .execute(&pool)
+        .await;
+    match result {
+        Ok(r) => Json(json!({ "status": "success" })),
+        Err(e) => {
+            println!("update error: {e}");
+            Json(json!({ "status": "error" }))
+        }
+    }
 }
 
 async fn get_users_chats(
@@ -389,7 +414,6 @@ async fn post_message(
         .and_then(|v| v.as_str())
         .unwrap_or("not_gemini");
     let gemint_text = text[0..min(text.len(), 7)].to_string();
-    println!("test is: {gemint_text}");
     println!("seeing if messages starts with gemini");
     if &gemint_text == "@gemini" {
         println!("message starts with @gemini");
@@ -833,17 +857,17 @@ async fn get_root_chat_id(pool: &PgPool, message_id: Uuid) -> Result<Uuid, sqlx:
     sqlx::query_scalar::<_, Uuid>(
         r#"
         WITH RECURSIVE chat_ancestry AS (
-            SELECT message_id, parent
+            SELECT message_id, parent_id
             FROM messages
             WHERE message_id = $1
             UNION ALL
-            SELECT m.message_id, m.parent
+            SELECT m.message_id, m.parent_id
             FROM messages m
-            JOIN chat_ancestry ca ON m.message_id = ca.parent
+            JOIN chat_ancestry ca ON m.message_id = ca.parent_id
         )
         SELECT message_id
         FROM chat_ancestry
-        WHERE parent IS NULL
+        WHERE parent_id IS NULL
         LIMIT 1
         "#,
     )

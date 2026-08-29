@@ -209,7 +209,6 @@ struct MessageName {
 struct UpdateMessage {
     content: serde_json::Value,
 }
-struct SendMessage {}
 async fn update_message(
     extract::State(pool): extract::State<PgPool>,
     Extension(auth_user): Extension<AuthUser>,
@@ -229,13 +228,12 @@ async fn update_message(
   WHERE message_id = (
       SELECT message_id
       FROM messages
-      WHERE content->>'text' = $2
+      WHERE content->>'name' = $2
       ORDER BY sent_at DESC
       LIMIT 1
   );
 "#;
 
-    //UPDATE messages SET content = $1 WHERE content->>'text' = $2 ORDER BY sent_at DESC LIMIT 1;";
     let result = sqlx::query(&query)
         .bind(content.content)
         .bind(&name.name)

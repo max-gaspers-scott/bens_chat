@@ -24,7 +24,7 @@ pub struct Message {
     pub sent_at: chrono::DateTime<chrono::Utc>,
 }
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
 #[serde(untagged)]
 pub enum SendibleContent {
     Img(ImgMessage),
@@ -77,7 +77,7 @@ trait MessageInterface {
     async fn show(&self);
 }
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
 struct TextMessage {
     text: String,
 }
@@ -90,7 +90,7 @@ impl MessageInterface for TextMessage {
     }
 }
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
 struct TitleMessage {
     title: String,
 }
@@ -104,7 +104,7 @@ impl MessageInterface for TitleMessage {
     }
 }
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
 struct ImgMessage {
     url: String,
 }
@@ -141,6 +141,13 @@ impl Connect4 {
         let end = vec![Col::new(); 7 - pos];
         let total = [begin, end].concat();
         Connect4 { name, grid: total }
+    }
+    pub fn update(old_board: Connect4, pos: usize) -> Connect4 {
+        let old_grid = old_board.grid;
+        Connect4 {
+            name: old_board.name,
+            grid: old_grid,
+        }
     }
 }
 

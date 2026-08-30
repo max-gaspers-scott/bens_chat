@@ -1,5 +1,5 @@
 mod structs;
-use crate::structs::{SendibleContent::Con4, Connect4, *};
+use crate::structs::{SendableContent::Con4, Connect4, Showable, *};
 use clap::builder::Str;
 use cool_cli_input::get_input;
 use futures_util::{FutureExt, StreamExt};
@@ -377,7 +377,7 @@ impl Window {
                     let id = m.message_id;
                     if cont == msg_name {
                         let old_board = match m.content {
-                            SendibleContent::Con4(ref c) => c,
+                            SendableContent::Con4(ref c) => c,
                             _ => panic!(), //TODO: shoudl retry on fialer
                         };
                         break;

@@ -1,0 +1,7 @@
+[workspace]
+members = [
+    "backend",
+    "chat-cli",
+    "shared",
+]
+resolver = "2"

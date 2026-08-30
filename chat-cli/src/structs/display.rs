@@ -1,4 +1,4 @@
-use super::types::{Connect4, ImgMessage, SendibleContent, TextMessage, TitleMessage};
+use bens_chat_shared::{Chip, Connect4, ImgMessage, SendableContent, TextMessage, TitleMessage};
 use crate::get_current_login;
 use image::DynamicImage;
 use reqwest::Client;
@@ -6,12 +6,13 @@ use termimad::print_text;
 
 const BASE_URL: &str = "https://bens-chat.team-stingray.com";
 
-trait MessageInterface {
+/// CLI-only trait for rendering a message to the terminal.
+pub trait Showable {
     async fn show(&self);
 }
 
-impl SendibleContent {
-    pub async fn show(&self) {
+impl Showable for SendableContent {
+    async fn show(&self) {
         match self {
             Self::Text(t) => t.show().await,
             Self::Img(i) => i.show().await,
@@ -21,7 +22,7 @@ impl SendibleContent {
     }
 }
 
-impl MessageInterface for TextMessage {
+impl Showable for TextMessage {
     async fn show(&self) {
         let raw = self.text.to_string();
         let fixed_input = raw.replace("\\n", "\n").replace("\\", "");
@@ -29,7 +30,7 @@ impl MessageInterface for TextMessage {
     }
 }
 
-impl MessageInterface for TitleMessage {
+impl Showable for TitleMessage {
     async fn show(&self) {
         let raw = self.title.to_string();
         let fixed_input = raw.replace("\\n", "\n").replace("\\", "");
@@ -38,7 +39,7 @@ impl MessageInterface for TitleMessage {
     }
 }
 
-impl MessageInterface for ImgMessage {
+impl Showable for ImgMessage {
     async fn show(&self) {
         println!("running image interface");
         let path = self.url.clone();
@@ -53,7 +54,7 @@ impl MessageInterface for ImgMessage {
     }
 }
 
-impl MessageInterface for Connect4 {
+impl Showable for Connect4 {
     async fn show(&self) {
         let name = &self.name;
         println!("{name}");
@@ -62,8 +63,8 @@ impl MessageInterface for Connect4 {
                 let chip = self.grid.get(r).unwrap().row.get(c);
                 match chip {
                     Some(c) => match c {
-                        super::types::Chip::Red => print!("R"),
-                        super::types::Chip::Yellow => print!("Y"),
+                        Chip::Red => print!("R"),
+                        Chip::Yellow => print!("Y"),
                     },
                     None => print!("_"),
                 }

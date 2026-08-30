@@ -1,5 +1,5 @@
 mod structs;
-use crate::structs::{SendibleContent::Con4, message_responce::Connect4, *};
+use crate::structs::{SendibleContent::Con4, Connect4, *};
 use clap::builder::Str;
 use cool_cli_input::get_input;
 use futures_util::{FutureExt, StreamExt};

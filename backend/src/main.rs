@@ -179,7 +179,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "/messages",
             get(get_message_id_sender_name_content_parent)
                 .post(post_message)
-                .patch(update_message),
+                .patch(update_message)
+                .patch(update_connect),
         )
         .route("/password-set", post(set_password))
         .route("/minio-fetch", get(get_fetch_url))
@@ -199,6 +200,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     axum::serve(listener, app).await.unwrap();
     Ok(())
+}
+
+fn update_connect(
+    extract::State(pool): extract::State<PgPool>,
+    Extension(auth_user): Extension<AuthUser>,
+    Query(name): Query<MessageName>,
+    Json(content): Json<UpdateMessage>,
+) -> Json<Value> {
+    Json(json!({ "status": "not implimented" }))
 }
 
 #[derive(Debug, Deserialize)]

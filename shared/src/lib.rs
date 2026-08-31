@@ -112,7 +112,10 @@ impl Connect4 {
         Connect4 { name, grid: total }
     }
 
-    pub fn update(old_board: Connect4, _pos: usize) -> Connect4 {
+    pub fn update(old_board: Connect4, pos: usize) -> Connect4 {
+        let new_g = old_board.grid.get(pos).unwrap();
+        new_g.row.push(Chip::Red);
+
         Connect4 {
             name: old_board.name,
             grid: old_board.grid,

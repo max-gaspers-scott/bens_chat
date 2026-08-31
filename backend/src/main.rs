@@ -89,6 +89,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .max_connections(100)
         .connect(&db_url)
         .await?;
+    sqlx::migrate!("./migrations").run(&pool).await?;
 
     let pool_for_ns = pool.clone();
     io.ns("/", move |s: SocketRef| {

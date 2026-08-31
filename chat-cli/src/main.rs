@@ -1,5 +1,5 @@
 mod structs;
-use crate::structs::{SendibleContent::Con4, message_responce::Connect4, *};
+use crate::structs::{Connect4, SendableContent::Con4, Showable, *};
 use clap::builder::Str;
 use cool_cli_input::get_input;
 use futures_util::{FutureExt, StreamExt};
@@ -367,23 +367,23 @@ impl Window {
 
                 println!("pos");
                 std::io::stdin().read_line(&mut buff).unwrap();
-                let input = buff.trim();
+                let input = buff.trim().parse().expect("not a number");
 
                 //TODO: bad code
-                let mut old_bard = Connect4::new(String::from("temp"), 1);
+                let mut old_bard = Connect4::new(String::from(msg_name), 1);
                 for m in &messages {
                     //TODO: get_content should be called stringify or similar
                     let cont = m.content.get_content();
                     let id = m.message_id;
                     if cont == msg_name {
                         let old_board = match m.content {
-                            SendibleContent::Con4(ref c) => c,
+                            SendableContent::Con4(ref c) => c,
                             _ => panic!(), //TODO: shoudl retry on fialer
                         };
                         break;
                     }
                 }
-                let testconn = Connect4::new(String::from("temp"), 5);
+                let testconn = Connect4::new(String::from(msg_name), input);
                 let content = serde_json::json!({
                       "content": json!(testconn),
                 });

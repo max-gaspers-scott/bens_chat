@@ -80,7 +80,11 @@ fn build_cors_layer() -> CorsLayer {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("backend starting");
-    dotenv::dotenv().ok();
+    // Try .env in the current directory first, then fall back to the workspace root (../)
+    // so `cargo run` works from both the repo root and the backend/ subdirectory.
+    if dotenv::dotenv().is_err() {
+        dotenv::from_path("../.env").ok();
+    }
     let (socket_layer, io) = SocketIo::new_layer();
 
     let db_url = env::var("DATABASE_URL")
@@ -89,6 +93,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .max_connections(100)
         .connect(&db_url)
         .await?;
+    sqlx::migrate!("./migrations").run(&pool).await?;
 
     let pool_for_ns = pool.clone();
     io.ns("/", move |s: SocketRef| {
@@ -178,7 +183,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "/messages",
             get(get_message_id_sender_name_content_parent)
                 .post(post_message)
-                .patch(update_message),
+                .patch(update_message)
+                .patch(update_connect),
         )
         .route("/password-set", post(set_password))
         .route("/minio-fetch", get(get_fetch_url))
@@ -200,11 +206,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+fn update_connect(
+    extract::State(pool): extract::State<PgPool>,
+    Extension(auth_user): Extension<AuthUser>,
+    Query(name): Query<MessageName>,
+    Json(content): Json<UpdateMessage>,
+) -> Json<Value> {
+    Json(json!({ "status": "not implimented" }))
+}
+
 #[derive(Debug, Deserialize)]
 struct MessageName {
     name: String,
 }
-
 #[derive(Debug, Deserialize)]
 struct UpdateMessage {
     content: serde_json::Value,

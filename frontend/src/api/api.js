@@ -157,7 +157,7 @@ export const api = {
     const response = await apiFetch(`${API_BASE_URL}/messages`, {
       method: 'POST',
       headers: authHeaders(),
-      body: JSON.stringify({ sender_name, parent, content }),
+      body: JSON.stringify({ sender_name, parent_id: parent, content }),
     });
     return response.json();
   },

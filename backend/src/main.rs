@@ -80,7 +80,11 @@ fn build_cors_layer() -> CorsLayer {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("backend starting");
-    dotenv::dotenv().ok();
+    // Try .env in the current directory first, then fall back to the workspace root (../)
+    // so `cargo run` works from both the repo root and the backend/ subdirectory.
+    if dotenv::dotenv().is_err() {
+        dotenv::from_path("../.env").ok();
+    }
     let (socket_layer, io) = SocketIo::new_layer();
 
     let db_url = env::var("DATABASE_URL")
@@ -215,7 +219,6 @@ fn update_connect(
 struct MessageName {
     name: String,
 }
-
 #[derive(Debug, Deserialize)]
 struct UpdateMessage {
     content: serde_json::Value,

@@ -1,8 +1,10 @@
-// minio stuff
+use axum::extract::connect_info;
+use bens_chat_shared::{Chip, Connect4, ImgMessage, SendableContent, TextMessage, TitleMessage};
 use dotenv::dotenv;
 use minio_rsc::client::PresignedArgs;
 use minio_rsc::provider::StaticProvider;
 use minio_rsc::{Minio, xml::ser::to_string};
+use reqwest::Client;
 use reqwest::header::{ACCEPT, CONTENT_TYPE as CT};
 use serde::{Deserialize, Serialize};
 use socketioxide::{
@@ -27,7 +29,7 @@ use axum::{
     routing::{get, post},
 };
 use bcrypt::{DEFAULT_COST, hash, verify};
-use core::str;
+use core::{panic, str};
 use serde_json::{Value, json};
 
 use sqlx::{PgPool, postgres::PgPoolOptions};
@@ -183,7 +185,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "/messages",
             get(get_message_id_sender_name_content_parent)
                 .post(post_message)
-                .patch(update_message)
+                // .patch(update_message)
                 .patch(update_connect),
         )
         .route("/password-set", post(set_password))
@@ -205,14 +207,67 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     axum::serve(listener, app).await.unwrap();
     Ok(())
 }
-
-fn update_connect(
+#[derive(Debug, Deserialize)]
+struct Position {
+    content: usize,
+}
+async fn update_connect(
     extract::State(pool): extract::State<PgPool>,
     Extension(auth_user): Extension<AuthUser>,
     Query(name): Query<MessageName>,
-    Json(content): Json<UpdateMessage>,
+    Json(positsion): Json<Position>,
 ) -> Json<Value> {
-    Json(json!({ "status": "not implimented" }))
+    let query = r#"
+      SELECT *
+      FROM messages
+      WHERE content->>'name' = $1
+      ORDER BY sent_at DESC
+      LIMIT 1;
+     "#;
+    let result = sqlx::query_as::<_, Message>(&query)
+        .bind(&name.name)
+        .fetch_one(&pool)
+        .await;
+    let msg = match result {
+        Ok(r) => r,
+        Err(e) => {
+            panic!("error geting message")
+        }
+    };
+    let board = msg.content;
+    let board = match serde_json::from_value::<Connect4>(board) {
+        Ok(c) => c,
+        Err(e) => {
+            panic!("error converting to Conenct4: {}", e);
+        }
+    };
+    let new_board = board.update(1);
+    let new_board_json = serde_json::to_value(&new_board).unwrap();
+
+    let query = r#"
+ UPDATE messages
+  SET content = $1
+  WHERE message_id = (
+      SELECT message_id
+      FROM messages
+      WHERE content->>'name' = $2
+      ORDER BY sent_at DESC
+      LIMIT 1
+  );
+"#;
+    let result = sqlx::query(&query)
+        .bind(new_board_json)
+        .bind(&name.name)
+        .bind(auth_user.username)
+        .execute(&pool)
+        .await;
+    match result {
+        Ok(r) => Json(json!({ "status": "success" })),
+        Err(e) => {
+            println!("update error: {e}");
+            Json(json!({ "status": "error" }))
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]

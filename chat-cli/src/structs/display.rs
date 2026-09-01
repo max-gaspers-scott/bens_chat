@@ -1,5 +1,5 @@
-use bens_chat_shared::{Chip, Connect4, ImgMessage, SendableContent, TextMessage, TitleMessage};
 use crate::get_current_login;
+use bens_chat_shared::{Chip, Connect4, ImgMessage, SendableContent, TextMessage, TitleMessage};
 use image::DynamicImage;
 use reqwest::Client;
 use termimad::print_text;
@@ -89,7 +89,7 @@ async fn download_img_from_db(url: &str) -> DynamicImage {
         .bearer_auth(login.token.clone())
         .send()
         .await
-        .unwrap();
+        .expect("could not get playload");
     let res: Img = res.json().await.map_err(|e| println!("{e}")).unwrap();
 
     let presigned_url = res.url;

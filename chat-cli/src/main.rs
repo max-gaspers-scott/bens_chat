@@ -328,35 +328,35 @@ impl Window {
                 continue;
             }
 
-            if message.trim() == "/update-message" {
-                let mut name_buff = String::new();
-                println!("what was the name of the message to update");
-                std::io::stdin().read_line(&mut name_buff).unwrap();
-                let msg_name = name_buff.trim();
-
-                let mut buff = String::new();
-
-                println!("what is the new content");
-                std::io::stdin().read_line(&mut buff).unwrap();
-                let input = buff.trim();
-                let content = serde_json::json!({
-                      "content": { "text": input.trim() }
-                });
-
-                let update_res =
-                    update_message(login_stuff, &content, String::from(msg_name)).await;
-                println!("messge name: {msg_name}");
-                println!("new text: {input}");
-
-                println!("contenet: {:?}", content);
-
-                match update_res {
-                    Ok(_) => {}
-                    Err(e) => println!("error updeteing message: {e}"),
-                }
-
-                continue;
-            }
+            // if message.trim() == "/update-message" {
+            //     let mut name_buff = String::new();
+            //     println!("what was the name of the message to update");
+            //     std::io::stdin().read_line(&mut name_buff).unwrap();
+            //     let msg_name = name_buff.trim();
+            //
+            //     let mut buff = String::new();
+            //
+            //     println!("what is the new content");
+            //     std::io::stdin().read_line(&mut buff).unwrap();
+            //     let input = buff.trim();
+            //     let content = serde_json::json!({
+            //           "content": { "text": input.trim() }
+            //     });
+            //
+            //     let update_res =
+            //         update_message(login_stuff, &content, String::from(msg_name)).await;
+            //     println!("messge name: {msg_name}");
+            //     println!("new text: {input}");
+            //
+            //     println!("contenet: {:?}", content);
+            //
+            //     match update_res {
+            //         Ok(_) => {}
+            //         Err(e) => println!("error updeteing message: {e}"),
+            //     }
+            //
+            //     continue;
+            // }
             if message.trim() == "/update-board" {
                 let mut name_buff = String::new();
                 println!("what was the name of the message to update");
@@ -367,39 +367,41 @@ impl Window {
 
                 println!("pos");
                 std::io::stdin().read_line(&mut buff).unwrap();
-                let input = buff.trim().parse().expect("not a number");
+                let position = buff.trim().parse().expect("not a number");
 
-                //TODO: bad code
-                let mut old_bard = Connect4::new(String::from(msg_name), 1);
+                //
+                // //TODO: bad code
+                let mut old_board = &Connect4::new(String::from(msg_name), 1);
                 for m in &messages {
                     //TODO: get_content should be called stringify or similar
                     let cont = m.content.get_content();
                     let id = m.message_id;
                     if cont == msg_name {
-                        let old_board = match m.content {
+                        old_board = match m.content {
                             SendableContent::Con4(ref c) => c,
                             _ => panic!(), //TODO: shoudl retry on fialer
                         };
                         break;
                     }
                 }
-                let testconn = Connect4::new(String::from(msg_name), input);
-                let content = serde_json::json!({
-                      "content": json!(testconn),
-                });
 
-                let update_res =
-                    update_message(login_stuff, &content, String::from("new game")).await;
-                println!("messge name: {msg_name}");
-                println!("new text: {input}");
-
-                println!("contenet: {:?}", content);
-
-                match update_res {
-                    Ok(_) => {}
-                    Err(e) => println!("error updeteing message: {e}"),
-                }
-
+                // let testconn = Connect4::new(String::from(msg_name), input);
+                // let content = serde_json::json!({
+                //       "content": json!(testconn),
+                // });
+                //
+                // let update_res =
+                //     update_message(login_stuff, &content, String::from("new game")).await;
+                // println!("messge name: {msg_name}");
+                // println!("new text: {input}");
+                //
+                // println!("contenet: {:?}", content);
+                //
+                // match update_res {
+                //     Ok(_) => {}
+                //     Err(e) => println!("error updeteing message: {e}"),
+                // }
+                //
                 continue;
             }
 
@@ -415,9 +417,8 @@ impl Window {
 struct UpdateMsgRes {
     status: String,
 }
-async fn update_message(
+async fn update_connect4(
     login: &LoginPayload,
-    new_content: &serde_json::Value,
     name: String,
 ) -> Result<UpdateMsgRes, reqwest::Error> {
     let url = format!("{BASE_URL}/messages?name={}", name);
@@ -426,7 +427,8 @@ async fn update_message(
 
     let response = client
         .patch(url)
-        .json(new_content)
+        .json() //needs to be a pos, so move the Position struct from the backend to
+        //shared and make a new instacne wth the users position they want
         .bearer_auth(login.token.clone())
         .send()
         .await?;

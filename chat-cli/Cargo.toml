@@ -8,7 +8,7 @@ description = "A cli for chatting with friends"
 license = "Apache-2.0"
 
 readme = "README.md"
-homepage = "https://max-gaspers-scott.team-stingray.com/project2"
+homepage = "https://max-gaspers-scott.team-stingray.com/rust-crates/cli-chat"
 repository = "https://github.com/max-gaspers-scott/bens_chat/tree/main/chat-cli"
 
 

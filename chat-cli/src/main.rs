@@ -1,5 +1,6 @@
 mod structs;
 use crate::structs::{Connect4, SendableContent::Con4, Showable, *};
+use bens_chat_shared::Position;
 use clap::builder::Str;
 use cool_cli_input::get_input;
 use futures_util::{FutureExt, StreamExt};
@@ -371,37 +372,29 @@ impl Window {
 
                 //
                 // //TODO: bad code
-                let mut old_board = &Connect4::new(String::from(msg_name), 1);
-                for m in &messages {
-                    //TODO: get_content should be called stringify or similar
-                    let cont = m.content.get_content();
-                    let id = m.message_id;
-                    if cont == msg_name {
-                        old_board = match m.content {
-                            SendableContent::Con4(ref c) => c,
-                            _ => panic!(), //TODO: shoudl retry on fialer
-                        };
-                        break;
-                    }
-                }
-
-                // let testconn = Connect4::new(String::from(msg_name), input);
+                // let mut old_board = &Connect4::new(String::from(msg_name), 1);
+                // for m in &messages {
+                //     //TODO: get_content should be called stringify or similar
+                //     let cont = m.content.get_content();
+                //     let id = m.message_id;
+                //     if cont == msg_name {
+                //         old_board = match m.content {
+                //             SendableContent::Con4(ref c) => c,
+                //             _ => panic!(), //TODO: shoudl retry on fialer
+                //         }::new(String::from(msg_name), input);
                 // let content = serde_json::json!({
                 //       "content": json!(testconn),
                 // });
                 //
-                // let update_res =
-                //     update_message(login_stuff, &content, String::from("new game")).await;
-                // println!("messge name: {msg_name}");
-                // println!("new text: {input}");
+                let update_res =
+                    update_connect4(login_stuff, position, String::from("new game")).await;
                 //
-                // println!("contenet: {:?}", content);
-                //
-                // match update_res {
-                //     Ok(_) => {}
-                //     Err(e) => println!("error updeteing message: {e}"),
-                // }
-                //
+
+                match update_res {
+                    Ok(_) => {}
+                    Err(e) => println!("error updeteing message: {e}"),
+                }
+
                 continue;
             }
 
@@ -419,16 +412,17 @@ struct UpdateMsgRes {
 }
 async fn update_connect4(
     login: &LoginPayload,
+    position: usize,
     name: String,
 ) -> Result<UpdateMsgRes, reqwest::Error> {
     let url = format!("{BASE_URL}/messages?name={}", name);
 
     let client = Client::new();
+    let pos_struct = Position { content: position };
 
     let response = client
         .patch(url)
-        .json() //needs to be a pos, so move the Position struct from the backend to
-        //shared and make a new instacne wth the users position they want
+        .json(&pos_struct)
         .bearer_auth(login.token.clone())
         .send()
         .await?;

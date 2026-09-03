@@ -58,9 +58,10 @@ impl Showable for Connect4 {
     async fn show(&self) {
         let name = &self.name;
         println!("{name}");
-        for r in 0..6 {
-            for c in 0..6 {
-                let chip = self.grid.get(r).unwrap().row.get(c);
+        let size = 7;
+        for r in (0..size).rev() {
+            for c in (0..size) {
+                let chip = self.grid.get(c).unwrap().row.get(r);
                 match chip {
                     Some(c) => match c {
                         Chip::Red => print!("R"),

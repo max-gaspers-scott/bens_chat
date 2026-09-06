@@ -433,7 +433,7 @@ async fn get_message_id_sender_name_content_parent(
         Err(e) => return Json(json!({"status": "error", "error": e.to_string()})),
     }
 
-    let query = "SELECT * FROM messages WHERE parent_id = $1";
+    let query = "SELECT * FROM messages WHERE parent_id = $1 ORDER BY sent_at";
     let q = sqlx::query_as::<_, Message>(&query).bind(match_val.parent.clone());
 
     match q.fetch_all(&pool).await {

@@ -107,7 +107,7 @@ pub struct Connect4 {
 impl Connect4 {
     pub fn new(name: String, pos: usize) -> Connect4 {
         let mut begin = vec![Col::new(); pos - 1];
-        begin.push(Col::new_start(Chip::Red)); // red always starts
+        begin.push(Col::new_start(Chip::Yellow));
         let end = vec![Col::new(); 7 - pos];
         let total = [begin, end].concat();
         Connect4 {
@@ -128,9 +128,14 @@ impl Connect4 {
         }
     }
     pub fn update(&self, pos: usize) -> Connect4 {
-        let new_stat = self.clone();
-        let mut new_stat = new_stat.switch_turn();
-        new_stat.grid[pos].row.push(new_stat.turn.clone());
+        let mut new_stat = self.clone();
+        let t = match self.turn {
+            Chip::Red => "red",
+            Chip::Yellow => "yello",
+        };
+        println!("pushing {t} chip");
+        new_stat.grid[pos].row.push(self.turn.clone());
+        let new_stat = new_stat.switch_turn();
         new_stat
     }
 }

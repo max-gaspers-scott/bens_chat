@@ -319,7 +319,13 @@ impl Window {
                 std::io::stdin().read_line(&mut buff).unwrap();
                 let input = buff.trim();
                 let num = input.parse().expect("not an integer");
-                let new_bard = Connect4::new(String::from("new game"), num);
+
+                let mut name_buff = String::new();
+                println!("whats the board name");
+                std::io::stdin().read_line(&mut name_buff).unwrap();
+
+                let name_buff = name_buff.trim().to_string();
+                let new_bard = Connect4::new("new game".to_string(), num);
                 let board_messge = SendMesage {
                     content: serde_json::to_value(new_bard).unwrap(),
                     ..msg
@@ -370,25 +376,8 @@ impl Window {
                 std::io::stdin().read_line(&mut buff).unwrap();
                 let position = buff.trim().parse().expect("not a number");
 
-                //
-                // //TODO: bad code
-                // let mut old_board = &Connect4::new(String::from(msg_name), 1);
-                // for m in &messages {
-                //     //TODO: get_content should be called stringify or similar
-                //     let cont = m.content.get_content();
-                //     let id = m.message_id;
-                //     if cont == msg_name {
-                //         old_board = match m.content {
-                //             SendableContent::Con4(ref c) => c,
-                //             _ => panic!(), //TODO: shoudl retry on fialer
-                //         }::new(String::from(msg_name), input);
-                // let content = serde_json::json!({
-                //       "content": json!(testconn),
-                // });
-                //
                 let update_res =
-                    update_connect4(login_stuff, position, String::from("new game")).await;
-                //
+                    update_connect4(login_stuff, position, "new game".to_string()).await;
 
                 match update_res {
                     Ok(_) => {}

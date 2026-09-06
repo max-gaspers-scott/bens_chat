@@ -19,20 +19,17 @@ const Connect4Board = memo(function Connect4Board({ msg, currentUser, onMoveSent
   const { grid, turn, name } = msg.content;
 
   // Build a 2D array [row][col] where row 0 is the TOP of the board.
-  // The Rust side stores chips bottom-up in col.row, so we reverse each column
-  // before displaying.
+  // col.row[0] is the bottom-most chip (index 0 = bottom, highest index = top).
+  // Display row r maps to col.row[ROWS - 1 - r]:
+  //   r=0 (top)    → col.row[5] (highest chip)
+  //   r=5 (bottom) → col.row[0] (lowest chip)
   const cells = [];
   for (let r = 0; r < ROWS; r++) {
     cells[r] = [];
     for (let c = 0; c < COLS; c++) {
       const col = grid[c];
-      if (!col) {
-        cells[r][c] = null;
-        continue;
-      }
-      // col.row[0] is the bottom-most chip; display row 0 at the top.
-      const chipIndex = col.row.length - 1 - (ROWS - 1 - r);
-      cells[r][c] = chipIndex >= 0 ? col.row[chipIndex] : null;
+      const chipIndex = ROWS - 1 - r;
+      cells[r][c] = col && chipIndex < col.row.length ? col.row[chipIndex] : null;
     }
   }
 
@@ -47,17 +44,13 @@ const Connect4Board = memo(function Connect4Board({ msg, currentUser, onMoveSent
     setError(null);
 
     try {
-      // A move is sent as a child of this message with content = { content: colIndex }
-      const result = await api.sendMessage({
-        sender_name: currentUser.username,
-        parent: msg.message_id,
-        content: { content: colIndex },
-      });
+      // PATCH /messages?name=<game_name> with body { content: colIndex }
+      const result = await api.updateConnect4(name, colIndex);
 
-      if (result.res === 'success') {
+      if (result.status === 'success') {
         if (onMoveSent) onMoveSent();
       } else {
-        setError(result.res || 'Failed to send move');
+        setError(result.status || 'Failed to send move');
       }
     } catch (err) {
       setError(err.message || 'Failed to send move');

@@ -130,10 +130,8 @@ function ChatView({ chatId, currentUser, onSelectChat }) {
       const result = await api.getMessages(currentParentId);
       if (result.status === 'success' && result.payload) {
         setMessages((prevMessages) => {
-          // Only update if messages have actually changed
-          const prevIds = prevMessages.map((m) => m.message_id).join(',');
-          const newIds = result.payload.map((m) => m.message_id).join(',');
-          if (prevIds === newIds) {
+          // Re-render if anything changed — IDs, order, or content (e.g. a Connect4 move).
+          if (JSON.stringify(prevMessages) === JSON.stringify(result.payload)) {
             return prevMessages;
           }
           return result.payload;

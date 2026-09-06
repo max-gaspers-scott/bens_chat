@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, memo, useRef } from 'react';
 import { api } from '../api/api';
 import SendMessage from './SendMessage';
+import Connect4Board from './Connect4Board';
 
 // Shows a placeholder shimmer while the signed URL is fetched and the image loads.
 const ChatImage = memo(function ChatImage({ objectKey }) {
@@ -235,35 +236,48 @@ function ChatView({ chatId, currentUser, onSelectChat }) {
         ) : messages.length === 0 ? (
           <p className="no-messages">No messages yet. Be the first to send one!</p>
         ) : (
-          messages.map((msg, index) => (
-            <div
-              key={msg.message_id || index}
-              className={`message ${msg.sender_name === currentUser.username ? 'own' : 'other'}`}
-            >
-              {msg.content && (msg.content.title || msg.content.text) && (msg.content.title || msg.content.text).trim() && (
-                <div className="message-content">{msg.content.title || msg.content.text}</div>
-              )}
-              {msg.content && msg.content.url && <ChatImage objectKey={msg.content.url} />}
-              <div className="message-meta">
-                <span className="message-sender">
-                  {msg.sender_name === currentUser.username ? 'You' : msg.sender_name}
-                </span>
-                <span className="message-time">
-                  {msg.sent_at ? new Date(msg.sent_at).toLocaleString() : ''}
-                </span>
+          messages.map((msg, index) => {
+            const isConnect4 = msg.content && Array.isArray(msg.content.grid);
+            return (
+              <div
+                key={msg.message_id || index}
+                className={`message ${msg.sender_name === currentUser.username ? 'own' : 'other'}${isConnect4 ? ' connect4-message' : ''}`}
+              >
+                {isConnect4 ? (
+                  <Connect4Board
+                    msg={msg}
+                    currentUser={currentUser}
+                    onMoveSent={handleRefresh}
+                  />
+                ) : (
+                  <>
+                    {msg.content && (msg.content.title || msg.content.text) && (msg.content.title || msg.content.text).trim() && (
+                      <div className="message-content">{msg.content.title || msg.content.text}</div>
+                    )}
+                    {msg.content && msg.content.url && <ChatImage objectKey={msg.content.url} />}
+                  </>
+                )}
+                <div className="message-meta">
+                  <span className="message-sender">
+                    {msg.sender_name === currentUser.username ? 'You' : msg.sender_name}
+                  </span>
+                  <span className="message-time">
+                    {msg.sent_at ? new Date(msg.sent_at).toLocaleString() : ''}
+                  </span>
+                </div>
+                {msg.message_id && (
+                  <button
+                    type="button"
+                    className="link-btn subchat-btn"
+                    onClick={() => openSubChat(msg)}
+                    title="Open a sub-chat from this message"
+                  >
+                    💬 Open sub-chat
+                  </button>
+                )}
               </div>
-              {msg.message_id && (
-                <button
-                  type="button"
-                  className="link-btn subchat-btn"
-                  onClick={() => openSubChat(msg)}
-                  title="Open a sub-chat from this message"
-                >
-                  💬 Open sub-chat
-                </button>
-              )}
-            </div>
-          ))
+            );
+          })
         )}
         <div ref={messagesEndRef} />
       </div>

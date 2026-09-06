@@ -1,6 +1,6 @@
 [package]
 name = "bens-chat-cli"
-version = "0.1.5"
+version = "0.1.6"
 edition = "2024"
 
 authors = ["Max Gaspers Scott gaspersscottma@gmail.com"]
@@ -8,7 +8,7 @@ description = "A cli for chatting with friends"
 license = "Apache-2.0"
 
 readme = "README.md"
-homepage = "https://max-gaspers-scott.team-stingray.com/project2"
+homepage = "https://max-gaspers-scott.team-stingray.com/rust-crates/cli-chat"
 repository = "https://github.com/max-gaspers-scott/bens_chat/tree/main/chat-cli"
 
 
@@ -17,7 +17,7 @@ categories = ["command-line-utilities", "development-tools::cargo-plugins"]
 [package.metadata.docs.rs]
 
 [dependencies]
-bens-chat-shared = { path = "../shared" }
+bens-chat-shared = { version = "0.1.0", path = "../shared" }
 reqwest = { version = "0.13", features = ["json", "form", "stream"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"

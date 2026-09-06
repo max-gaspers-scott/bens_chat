@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-bens-chat-shared = { path = "../shared", features = ["db"] }
+bens-chat-shared = { version = "0.1.0", path = "../shared", features = ["db"] }
 
 axum = { version = "0.7", features = ["macros"] }
 socketioxide = { version = "0.14", features = ["v4"] }

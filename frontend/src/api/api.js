@@ -162,6 +162,19 @@ export const api = {
     return response.json();
   },
 
+  // Drop a piece into a Connect4 game. name is the game's name field, colIndex is 0-based.
+  async updateConnect4(name, colIndex) {
+    const response = await apiFetch(
+      `${API_BASE_URL}/messages?name=${encodeURIComponent(name)}`,
+      {
+        method: 'PATCH',
+        headers: authHeaders(),
+        body: JSON.stringify({ content: colIndex }),
+      }
+    );
+    return response.json();
+  },
+
   // Get a presigned PUT URL + server-generated object key for uploading an image to MinIO
   async getUploadUrl(chatId, fileExtension) {
     const response = await apiFetch(

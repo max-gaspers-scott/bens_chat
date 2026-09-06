@@ -1,5 +1,7 @@
 use axum::extract::connect_info;
-use bens_chat_shared::{Chip, Connect4, ImgMessage, SendableContent, TextMessage, TitleMessage};
+use bens_chat_shared::{
+    Chip, Connect4, ImgMessage, Position, SendableContent, TextMessage, TitleMessage,
+};
 use dotenv::dotenv;
 use minio_rsc::client::PresignedArgs;
 use minio_rsc::provider::StaticProvider;
@@ -207,10 +209,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     axum::serve(listener, app).await.unwrap();
     Ok(())
 }
-#[derive(Debug, Deserialize)]
-struct Position {
-    content: usize,
-}
+
 async fn update_connect(
     extract::State(pool): extract::State<PgPool>,
     Extension(auth_user): Extension<AuthUser>,
@@ -241,7 +240,7 @@ async fn update_connect(
             panic!("error converting to Conenct4: {}", e);
         }
     };
-    let new_board = board.update(1);
+    let new_board = board.update(positsion.content);
     let new_board_json = serde_json::to_value(&new_board).unwrap();
 
     let query = r#"
@@ -434,7 +433,7 @@ async fn get_message_id_sender_name_content_parent(
         Err(e) => return Json(json!({"status": "error", "error": e.to_string()})),
     }
 
-    let query = "SELECT * FROM messages WHERE parent_id = $1";
+    let query = "SELECT * FROM messages WHERE parent_id = $1 ORDER BY sent_at";
     let q = sqlx::query_as::<_, Message>(&query).bind(match_val.parent.clone());
 
     match q.fetch_all(&pool).await {

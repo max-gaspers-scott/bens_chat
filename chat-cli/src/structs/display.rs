@@ -3,6 +3,7 @@ use bens_chat_shared::{Chip, Connect4, ImgMessage, SendableContent, TextMessage,
 use image::DynamicImage;
 use reqwest::Client;
 use termimad::print_text;
+use viuer::print;
 
 const BASE_URL: &str = "https://bens-chat.team-stingray.com";
 
@@ -17,7 +18,7 @@ impl Showable for SendableContent {
             Self::Text(t) => t.show().await,
             Self::Img(i) => i.show().await,
             Self::Title(t) => t.show().await,
-            Self::Con4(t) => t.show().await,
+            Self::Con4(b) => b.show().await,
         }
     }
 }
@@ -57,10 +58,16 @@ impl Showable for ImgMessage {
 impl Showable for Connect4 {
     async fn show(&self) {
         let name = &self.name;
+        let turn = &self.turn;
+        match turn {
+            Chip::Red => println!("reds turn"),
+            Chip::Yellow => println!("yellows turn"),
+        }
         println!("{name}");
-        for r in 0..6 {
-            for c in 0..6 {
-                let chip = self.grid.get(r).unwrap().row.get(c);
+        let size = 7;
+        for r in (0..size).rev() {
+            for c in (0..size) {
+                let chip = self.grid.get(c).unwrap().row.get(r);
                 match chip {
                     Some(c) => match c {
                         Chip::Red => print!("R"),

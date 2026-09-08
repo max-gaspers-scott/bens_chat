@@ -530,6 +530,7 @@ async fn show_messages(messages: &[Message], login: &LoginPayload) -> Result<(),
     for m in messages {
         //TODO: n+1 problem, shoudl fix on backend
         let messages = get_messages(login, &m.message_id).await.unwrap();
+        // let id =
 
         if m.sender_name == get_current_login().unwrap().username {
             print!("you: ");

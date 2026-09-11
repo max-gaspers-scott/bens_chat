@@ -43,4 +43,10 @@ Terminal client. Imports shared data types and defines CLI-only behaviour on top
 them — display logic lives in `chat-cli/src/structs/display.rs` behind the `Showable`
 trait (adding methods to foreign types via a local trait rather than inherent impls).
 
+### deployment 
+for now the deplyment steps are as such
+* build the conteinre with take and incremtn verison 
+* push do dockerhub 
+* incremtn version in prod.yaml on server 
 
+this is a bad ci/cd and Im working on fixing

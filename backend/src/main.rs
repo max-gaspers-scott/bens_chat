@@ -92,7 +92,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (socket_layer, io) = SocketIo::new_layer();
 
     let db_url = env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgres://dbuser:p@localhost:5432/data".to_string());
+        .unwrap_or_else(|_| "postgres://dbuser:p4321@localhost:5432/data".to_string());
     let pool = PgPoolOptions::new()
         .max_connections(100)
         .connect(&db_url)

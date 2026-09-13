@@ -27,7 +27,7 @@ use viuer::print;
 
 // should be in env, but this will work for now
 // const PORT: u32 = 8081;
-const BASE_URL: &str = "http://localhost:8081"; //9821
+const BASE_URL: &str = "http://localhost:9821"; //9821
 // const BASE_URL: &str = "https://bens-chat.team-stingray.com";
 
 use std::sync::RwLock;
@@ -323,9 +323,17 @@ impl Window {
                 let mut name_buff = String::new();
                 println!("whats the board name");
                 std::io::stdin().read_line(&mut name_buff).unwrap();
+                let mut aponant_buff = String::new();
+                println!("whats the other players name");
+                std::io::stdin().read_line(&mut aponant_buff).unwrap();
 
                 let name_buff = name_buff.trim().to_string();
-                let new_bard = Connect4::new("new game".to_string(), num);
+                let new_bard = Connect4::new(
+                    "new game".to_string(),
+                    num,
+                    &login_stuff.username,
+                    aponant_buff,
+                );
                 let board_messge = SendMesage {
                     content: serde_json::to_value(new_bard).unwrap(),
                     ..msg

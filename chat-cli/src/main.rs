@@ -331,7 +331,7 @@ impl Window {
                 let new_bard = Connect4::new(
                     "new game".to_string(),
                     num,
-                    &login_stuff.username,
+                    login_stuff.username.clone(),
                     aponant_buff,
                 );
                 let board_messge = SendMesage {

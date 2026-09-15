@@ -110,7 +110,7 @@ pub struct Connect4 {
 }
 
 impl Connect4 {
-    pub fn new(name: String, pos: usize, player1: &String, player2: String) -> Connect4 {
+    pub fn new(name: String, pos: usize, player1: String, player2: String) -> Connect4 {
         let mut begin = vec![Col::new(); pos - 1];
         begin.push(Col::new_start(Chip::Yellow));
         let end = vec![Col::new(); 7 - pos];
@@ -137,22 +137,22 @@ impl Connect4 {
     pub fn update(&self, pos: usize, player_name: String) -> Connect4 {
         let player_name = player_name.clone();
         let mut new_stat = self.clone();
-        // if new_stat.turn == Chip::Red && self.player1 != player_name {
-        //     return self.clone();
-        // }
-        // if new_stat.turn == Chip::Yellow && self.player2 != player_name {
-        //     return self.clone();
-        // }
+        let is_plaer1 = player_name == new_stat.player1;
+        let players_color = if is_plaer1 { Chip::Red } else { Chip::Yellow };
+        let can_play = players_color == new_stat.turn;
         println!("player name: {player_name}");
-        let temp_turn = new_stat.turn.clone();
-        println!("turn: {:?}", temp_turn);
-        let players_collor = if player_name == self.player1 {Chip::Red} else if player_name == self.player2.clone() {Chip::Yellow}
+        println!("plaery1: {:?}", self.player1);
+        println!("player collor: {:?}", players_color);
+        println!("can play: {can_play}");
 
         let t = match self.turn {
             Chip::Red => "red",
             Chip::Yellow => "yello",
         };
-        println!("pushing {t} chip");
+        if !can_play {
+            return new_stat;
+        }
+        println!("current turn: {t}");
         new_stat.grid[pos.clone()].row.push(self.turn.clone());
         let new_stat = new_stat.switch_turn();
         new_stat

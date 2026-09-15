@@ -91,8 +91,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let (socket_layer, io) = SocketIo::new_layer();
 
-    let db_url = env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgres://dbuser:p4321@localhost:5432/data".to_string());
+    let db_url = env::var("DATABASE_URL").expect("no db url in env");
     let pool = PgPoolOptions::new()
         .max_connections(100)
         .connect(&db_url)
@@ -240,7 +239,7 @@ async fn update_connect(
             panic!("error converting to Conenct4: {}", e);
         }
     };
-    let new_board = board.update(positsion.content);
+    let new_board = board.update(positsion.content.clone(), auth_user.username.clone());
     let new_board_json = serde_json::to_value(&new_board).unwrap();
 
     let query = r#"

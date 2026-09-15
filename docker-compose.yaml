@@ -7,6 +7,8 @@ services:
       POSTGRES_USER: dbuser
       POSTGRES_PASSWORD: p4321
       POSTGRES_DB: data
+    ports:
+      - 5432:5432
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:

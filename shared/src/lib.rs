@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 // ---------------------------------------------------------------------------
 // User
@@ -100,18 +101,24 @@ pub struct ImgMessage {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Connect4 {
     pub turn: Chip,
+    #[serde(default)]
+    pub player1: String,
+    #[serde(default)]
+    pub player2: String,
     pub name: String,
     pub grid: Vec<Col>,
 }
 
 impl Connect4 {
-    pub fn new(name: String, pos: usize) -> Connect4 {
+    pub fn new(name: String, pos: usize, player1: &String, player2: String) -> Connect4 {
         let mut begin = vec![Col::new(); pos - 1];
         begin.push(Col::new_start(Chip::Yellow));
         let end = vec![Col::new(); 7 - pos];
         let total = [begin, end].concat();
         Connect4 {
             name,
+            player1: player1.clone(),
+            player2: player2,
             grid: total,
             turn: Chip::Red,
         }
@@ -127,14 +134,26 @@ impl Connect4 {
             ..self
         }
     }
-    pub fn update(&self, pos: usize) -> Connect4 {
+    pub fn update(&self, pos: usize, player_name: String) -> Connect4 {
+        let player_name = player_name.clone();
         let mut new_stat = self.clone();
+        // if new_stat.turn == Chip::Red && self.player1 != player_name {
+        //     return self.clone();
+        // }
+        // if new_stat.turn == Chip::Yellow && self.player2 != player_name {
+        //     return self.clone();
+        // }
+        println!("player name: {player_name}");
+        let temp_turn = new_stat.turn.clone();
+        println!("turn: {:?}", temp_turn);
+        let players_collor = if player_name == self.player1 {Chip::Red} else if player_name == self.player2.clone() {Chip::Yellow}
+
         let t = match self.turn {
             Chip::Red => "red",
             Chip::Yellow => "yello",
         };
         println!("pushing {t} chip");
-        new_stat.grid[pos].row.push(self.turn.clone());
+        new_stat.grid[pos.clone()].row.push(self.turn.clone());
         let new_stat = new_stat.switch_turn();
         new_stat
     }
@@ -160,11 +179,12 @@ impl Default for Col {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub enum Chip {
     Red,
     Yellow,
 }
+
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Position {
     pub content: usize,

@@ -47,6 +47,33 @@ describe('api auth helpers', () => {
     );
   });
 
+  test('createConnect4 starts with an empty board', async () => {
+    await api.createConnect4({
+      senderName: 'alice',
+      chatId: 'chat-1',
+      boardName: 'Game',
+      opponent: 'bob',
+    });
+
+    expect(fetch).toHaveBeenCalledWith(
+      '/messages',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          sender_name: 'alice',
+          parent_id: 'chat-1',
+          content: {
+            turn: 'Red',
+            player1: 'alice',
+            player2: 'bob',
+            name: 'Game',
+            grid: Array.from({ length: 7 }, () => ({ row: [] })),
+          },
+        }),
+      }),
+    );
+  });
+
   test('protected requests include bearer token when stored', async () => {
     api.setToken('token-123');
 

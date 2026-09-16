@@ -48,3 +48,58 @@ test('renders all messages returned for a chat', async () => {
     expect(api.getMessages).toHaveBeenCalledWith('chat-1');
   });
 });
+
+test('renders back to chats button and calls onSelectChat with null when clicked', async () => {
+  api.getMessages.mockResolvedValue({
+    status: 'success',
+    payload: [],
+  });
+  const mockSelectChat = jest.fn();
+
+  render(
+    <ChatView
+      chatId="chat-1"
+      currentUser={{ username: 'user-1' }}
+      onSelectChat={mockSelectChat}
+    />
+  );
+
+  expect(await screen.findByText(/No messages yet/i)).toBeInTheDocument();
+  const backButton = screen.getByRole('button', { name: /back to chats/i });
+  expect(backButton).toBeInTheDocument();
+  backButton.click();
+  expect(mockSelectChat).toHaveBeenCalledWith(null);
+});
+
+test('renders toggle sidebar button and calls onToggleSidebar when clicked', async () => {
+  api.getMessages.mockResolvedValue({
+    status: 'success',
+    payload: [],
+  });
+  const mockToggleSidebar = jest.fn();
+
+  const { rerender } = render(
+    <ChatView
+      chatId="chat-1"
+      currentUser={{ username: 'user-1' }}
+      onToggleSidebar={mockToggleSidebar}
+      sidebarOpen={false}
+    />
+  );
+
+  expect(await screen.findByText(/No messages yet/i)).toBeInTheDocument();
+  const toggleButton = screen.getByRole('button', { name: /toggle chats list/i });
+  expect(toggleButton).toHaveTextContent(/📋 Chats/i);
+  toggleButton.click();
+  expect(mockToggleSidebar).toHaveBeenCalledTimes(1);
+
+  rerender(
+    <ChatView
+      chatId="chat-1"
+      currentUser={{ username: 'user-1' }}
+      onToggleSidebar={mockToggleSidebar}
+      sidebarOpen={true}
+    />
+  );
+  expect(screen.getByRole('button', { name: /toggle chats list/i })).toHaveTextContent(/📋 Hide Chats/i);
+});

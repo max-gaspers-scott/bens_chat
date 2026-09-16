@@ -460,10 +460,6 @@ async fn get_message_id_sender_name_content_parent(
     }
 }
 
-//TODO: @gemini is bad solution
-//should check if the chat is with a user named "gemini" and no other users and if so post gemini
-//respoce
-
 //TODO: the function (and endpoint) has too much responsibility
 //should have a separate endpoint+handler for posting root messages, maybe called create chat
 //
@@ -478,33 +474,6 @@ async fn post_message(
         .get("text")
         .and_then(|v| v.as_str())
         .unwrap_or("not_gemini");
-    let gemint_text = text[0..min(text.len(), 7)].to_string();
-    println!("seeing if messages starts with gemini");
-    if &gemint_text == "@gemini" {
-        println!("message starts with @gemini");
-        let gem_res = match gemini(&payload.content["text"].to_string()).await {
-            Ok(res) => res,
-            Err(e) => format!("Error generating content: {}", e),
-        };
-
-        let content = serde_json::json!({
-            "text": gem_res,
-        });
-        let query = "INSERT INTO messages (sender_name, parent_id, content) VALUES ($1, $2, $3) RETURNING *";
-        let user_copy = auth_user.username.clone();
-
-        let q = sqlx::query_as::<_, Message>(query)
-            .bind(user_copy) // why not gemini a
-            // hardcoded uuid of gemini??
-            .bind(payload.parent_id)
-            .bind(content);
-
-        let post_gemini_res = q.fetch_one(&pool).await;
-        match post_gemini_res {
-            Ok(value) => {}
-            Err(e) => println!("error happened trying to post gemini response: {e}"),
-        }
-    }
 
     // change hardcoded number of values
     let query =

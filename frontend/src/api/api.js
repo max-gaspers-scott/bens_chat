@@ -162,6 +162,32 @@ export const api = {
     return response.json();
   },
 
+  // Create a new Connect4 game as a message in a chat.
+  // senderName   – the logged-in user (becomes player1 / Red)
+  // chatId       – parent message id (the chat root)
+  // boardName    – arbitrary display name for the game
+  // startCol     – 1-based column index where the first Yellow chip is placed
+  // opponent     – username of the other player (player2 / Yellow)
+  async createConnect4({ senderName, chatId, boardName, startCol, opponent }) {
+    // Build the initial grid (7 columns). The chosen column gets one Yellow chip.
+    const grid = Array.from({ length: 7 }, (_, i) => ({
+      row: i === startCol - 1 ? ['Yellow'] : [],
+    }));
+    const content = {
+      turn: 'Red',
+      player1: senderName,
+      player2: opponent,
+      name: boardName,
+      grid,
+    };
+    const response = await apiFetch(`${API_BASE_URL}/messages`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ sender_name: senderName, parent_id: chatId, content }),
+    });
+    return response.json();
+  },
+
   // Drop a piece into a Connect4 game. name is the game's name field, colIndex is 0-based.
   async updateConnect4(name, colIndex) {
     const response = await apiFetch(

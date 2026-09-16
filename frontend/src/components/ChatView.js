@@ -104,7 +104,7 @@ function StartDirectChatForm({ currentUser, onSelectChat }) {
   );
 }
 
-function ChatView({ chatId, currentUser, onSelectChat }) {
+function ChatView({ chatId, currentUser, onSelectChat, onToggleSidebar, sidebarOpen }) {
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
   // Navigation stack of parents. The first entry is the chat's root message;
@@ -217,7 +217,7 @@ function ChatView({ chatId, currentUser, onSelectChat }) {
           <div className="subchat-nav">
             <button
               type="button"
-              className="link-btn"
+              className="link-btn back-btn"
               onClick={() => goToParent(parentStack.length - 2)}
             >
               ← Back
@@ -225,7 +225,20 @@ function ChatView({ chatId, currentUser, onSelectChat }) {
             <h3>{currentParent.label}</h3>
           </div>
         ) : (
-          <h3>Chat</h3>
+          <div className="chat-header-main">
+            <h3>Chat</h3>
+            {onToggleSidebar && (
+              <button
+                type="button"
+                className="toggle-sidebar-btn"
+                onClick={onToggleSidebar}
+                title="Toggle chats list"
+                aria-label="Toggle chats list"
+              >
+                📋 {sidebarOpen ? 'Hide Chats' : 'Chats'}
+              </button>
+            )}
+          </div>
         )}
       </div>
       <div className="messages-container">

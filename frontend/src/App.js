@@ -53,7 +53,26 @@ function App() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(() =>
     readStoredNotificationsEnabled()
   );
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const notificationsEnabledRef = useRef(notificationsEnabled);
+  const mobileMenuRef = useRef(null);
+
+  // Close mobile menu when clicking outside
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const handleClickOutside = (e) => {
+      if (mobileMenuRef.current && !mobileMenuRef.current.contains(e.target)) {
+        setMobileMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, [mobileMenuOpen]);
 
   const toggleTheme = () => {
     const newTheme = !darkTheme;
@@ -110,11 +129,24 @@ function App() {
     setView('chat');
   };
 
+  const handleGoHome = () => {
+    setSelectedChatId(null);
+    setMobileSidebarOpen(false);
+    setMobileMenuOpen(false);
+    if (currentUser) {
+      setView('chat');
+    } else {
+      setView('login');
+    }
+  };
+
   const handleLogout = useCallback(() => {
     api.clearToken();
     localStorage.removeItem(USER_STORAGE_KEY);
     setCurrentUser(null);
     setSelectedChatId(null);
+    setMobileSidebarOpen(false);
+    setMobileMenuOpen(false);
     setView('login');
   }, []);
 
@@ -176,42 +208,93 @@ function App() {
     window.dispatchEvent(new CustomEvent('refreshChats'));
     if (newChatId) {
       setSelectedChatId(newChatId);
+      setMobileSidebarOpen(false);
     }
   };
 
   const handleSelectChat = (chatId) => {
     setSelectedChatId(chatId);
+    setMobileSidebarOpen(false);
   };
 
   return (
     <div className="App">
       <header className="App-header">
-        <h1>Chat App</h1>
-        {currentUser && (
-          <div className="user-info">
-            <span>Logged in as: {currentUser.username}</span>
+        <h1
+          className="app-title"
+          onClick={handleGoHome}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              handleGoHome();
+            }
+          }}
+          title="Chat App - Go to Home"
+        >
+          Chat App
+        </h1>
+        <div className="header-actions" ref={mobileMenuRef}>
+          {currentUser && (
+            <div className={`user-info ${mobileMenuOpen ? 'mobile-menu-open' : ''}`}>
+              <span className="user-greeting">
+                Logged in as: <strong>{currentUser.username}</strong>
+              </span>
+              <button
+                onClick={() => {
+                  toggleNotifications();
+                  setMobileMenuOpen(false);
+                }}
+                className="settings-btn"
+                title={
+                  notificationsEnabled
+                    ? 'Disable push notifications'
+                    : 'Enable push notifications'
+                }
+              >
+                {notificationsEnabled ? '🔔 Notifications On' : '🔕 Notifications Off'}
+              </button>
+              <button
+                onClick={() => {
+                  setView('reset-password');
+                  setMobileMenuOpen(false);
+                }}
+                className="settings-btn"
+              >
+                Change Password
+              </button>
+              <button
+                onClick={() => {
+                  handleLogout();
+                  setMobileMenuOpen(false);
+                }}
+                className="logout-btn"
+              >
+                Logout
+              </button>
+            </div>
+          )}
+          <button
+            onClick={toggleTheme}
+            className="theme-toggle-btn"
+            title="Toggle theme"
+            aria-label="Toggle theme"
+          >
+            {darkTheme ? '☀️' : '🌙'}
+          </button>
+          {currentUser && (
             <button
-              onClick={toggleNotifications}
-              className="settings-btn"
-              title={
-                notificationsEnabled
-                  ? 'Disable push notifications'
-                  : 'Enable push notifications'
-              }
+              type="button"
+              className="mobile-menu-toggle-btn"
+              onClick={() => setMobileMenuOpen((prev) => !prev)}
+              aria-label="Toggle user menu"
+              title="User menu"
             >
-              {notificationsEnabled ? '🔔 Notifications On' : '🔕 Notifications Off'}
+              {mobileMenuOpen ? '✕' : '☰'}
             </button>
-            <button onClick={() => setView('reset-password')} className="settings-btn">
-              Change Password
-            </button>
-            <button onClick={handleLogout} className="logout-btn">
-              Logout
-            </button>
-          </div>
-        )}
-        <button onClick={toggleTheme} className="theme-toggle-btn">
-          {darkTheme ? '☀️' : '🌙'}
-        </button>
+          )}
+        </div>
       </header>
 
       <main className="App-main">
@@ -236,8 +319,32 @@ function App() {
         )}
 
         {currentUser && view === 'chat' && (
-          <div className={`chat-container ${!selectedChatId ? 'no-chat-selected' : ''}`}>
-            <aside className="chat-sidebar">
+          <div
+            className={`chat-container ${!selectedChatId ? 'no-chat-selected' : ''} ${
+              mobileSidebarOpen ? 'mobile-sidebar-open' : ''
+            }`}
+          >
+            {mobileSidebarOpen && selectedChatId && (
+              <div
+                className="mobile-sidebar-backdrop"
+                onClick={() => setMobileSidebarOpen(false)}
+                aria-hidden="true"
+              />
+            )}
+            <aside className={`chat-sidebar ${mobileSidebarOpen ? 'show-mobile' : ''}`}>
+              {selectedChatId && (
+                <div className="mobile-sidebar-header">
+                  <span className="mobile-sidebar-title">Chats & Groups</span>
+                  <button
+                    type="button"
+                    className="mobile-sidebar-close-btn"
+                    onClick={() => setMobileSidebarOpen(false)}
+                    aria-label="Close chat list"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
               <CreateChat currentUser={currentUser} onChatCreated={handleChatCreated} />
               <ChatList
                 currentUser={currentUser}
@@ -250,6 +357,8 @@ function App() {
                 chatId={selectedChatId}
                 currentUser={currentUser}
                 onSelectChat={handleSelectChat}
+                onToggleSidebar={() => setMobileSidebarOpen((prev) => !prev)}
+                sidebarOpen={mobileSidebarOpen}
               />
             </section>
           </div>

@@ -328,12 +328,8 @@ impl Window {
                 std::io::stdin().read_line(&mut aponant_buff).unwrap();
 
                 let name_buff = name_buff.trim().to_string();
-                let new_bard = Connect4::new(
-                    "new game".to_string(),
-                    num,
-                    &login_stuff.username,
-                    aponant_buff,
-                );
+                let new_bard =
+                    Connect4::new(name_buff, num, login_stuff.username.clone(), aponant_buff);
                 let board_messge = SendMesage {
                     content: serde_json::to_value(new_bard).unwrap(),
                     ..msg
@@ -384,8 +380,7 @@ impl Window {
                 std::io::stdin().read_line(&mut buff).unwrap();
                 let position = buff.trim().parse().expect("not a number");
 
-                let update_res =
-                    update_connect4(login_stuff, position, "new game".to_string()).await;
+                let update_res = update_connect4(login_stuff, position, name_buff).await;
 
                 match update_res {
                     Ok(_) => {}

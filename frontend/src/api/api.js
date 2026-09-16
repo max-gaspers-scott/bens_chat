@@ -166,13 +166,9 @@ export const api = {
   // senderName   – the logged-in user (becomes player1 / Red)
   // chatId       – parent message id (the chat root)
   // boardName    – arbitrary display name for the game
-  // startCol     – 1-based column index where the first Yellow chip is placed
   // opponent     – username of the other player (player2 / Yellow)
-  async createConnect4({ senderName, chatId, boardName, startCol, opponent }) {
-    // Build the initial grid (7 columns). The chosen column gets one Yellow chip.
-    const grid = Array.from({ length: 7 }, (_, i) => ({
-      row: i === startCol - 1 ? ['Yellow'] : [],
-    }));
+  async createConnect4({ senderName, chatId, boardName, opponent }) {
+    const grid = Array.from({ length: 7 }, () => ({ row: [] }));
     const content = {
       turn: 'Red',
       player1: senderName,

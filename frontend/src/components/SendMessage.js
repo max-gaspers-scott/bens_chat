@@ -6,7 +6,6 @@ import { api } from '../api/api';
 // ---------------------------------------------------------------------------
 function Connect4Form({ senderName, onSubmit, onCancel, loading, serverError }) {
   const [boardName, setBoardName] = useState('');
-  const [startCol, setStartCol] = useState('4');
   const [opponent, setOpponent] = useState('');
   const [validationError, setValidationError] = useState('');
 
@@ -14,12 +13,10 @@ function Connect4Form({ senderName, onSubmit, onCancel, loading, serverError }) 
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    const col = parseInt(startCol, 10);
     if (!boardName.trim()) { setValidationError('Board name is required'); return; }
     if (!opponent.trim()) { setValidationError('Opponent username is required'); return; }
-    if (isNaN(col) || col < 1 || col > 7) { setValidationError('Starting column must be 1–7'); return; }
     setValidationError('');
-    onSubmit({ boardName: boardName.trim(), startCol: col, opponent: opponent.trim() });
+    onSubmit({ boardName: boardName.trim(), opponent: opponent.trim() });
   };
 
   return (
@@ -46,20 +43,6 @@ function Connect4Form({ senderName, onSubmit, onCancel, loading, serverError }) 
         placeholder="their username"
         value={opponent}
         onChange={(e) => setOpponent(e.target.value)}
-        disabled={loading}
-      />
-
-      <label className="attach-modal-label" htmlFor="c4-start-col">
-        Starting column (1–7) — Yellow's first chip
-      </label>
-      <input
-        id="c4-start-col"
-        className="attach-modal-input"
-        type="number"
-        min="1"
-        max="7"
-        value={startCol}
-        onChange={(e) => setStartCol(e.target.value)}
         disabled={loading}
       />
 
@@ -171,7 +154,7 @@ function SendMessage({ chatId, senderName, onMessageSent }) {
   };
 
   // ---- Create Connect4 board ----
-  const handleConnect4Submit = async ({ boardName, startCol, opponent }) => {
+  const handleConnect4Submit = async ({ boardName, opponent }) => {
     setLoading(true);
     setConnect4Error('');
     try {
@@ -179,7 +162,6 @@ function SendMessage({ chatId, senderName, onMessageSent }) {
         senderName,
         chatId,
         boardName,
-        startCol,
         opponent,
       });
       if (result.res === 'success') {

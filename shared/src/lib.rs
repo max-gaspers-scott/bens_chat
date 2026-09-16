@@ -110,16 +110,13 @@ pub struct Connect4 {
 }
 
 impl Connect4 {
-    pub fn new(name: String, pos: usize, player1: String, player2: String) -> Connect4 {
-        let mut begin = vec![Col::new(); pos - 1];
-        begin.push(Col::new_start(Chip::Yellow));
-        let end = vec![Col::new(); 7 - pos];
-        let total = [begin, end].concat();
+    pub fn new(name: String, player1: String, player2: String) -> Connect4 {
+        let board = vec![Col::new(); 7];
         Connect4 {
             name,
             player1: player1.clone(),
             player2: player2,
-            grid: total,
+            grid: board,
             turn: Chip::Red,
         }
     }

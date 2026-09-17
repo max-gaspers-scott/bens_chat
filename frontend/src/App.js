@@ -231,9 +231,9 @@ function App() {
               handleGoHome();
             }
           }}
-          title="Chat App - Go to Home"
+          title="Bens Chat"
         >
-          Chat App
+          Bens Chat
         </h1>
         <div className="header-actions" ref={mobileMenuRef}>
           {currentUser && (

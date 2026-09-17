@@ -17,39 +17,23 @@ services:
       timeout: 5s
       retries: 10
 
-  minio:
-    image: minio/minio:latest
-    command: server /data --console-address ":9001"
+
+  rustfs:
+    image: rustfs/rustfs:1.0.0-alpha.89
+    container_name: bens_chat2_rustfs
+    hostname: rustfs
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
+      - RUSTFS_VOLUMES=/data
+      - RUSTFS_ADDRESS=0.0.0.0:9000
+      - RUSTFS_CONSOLE_ENABLE=true
+      - RUSTFS_CONSOLE_ADDRESS=0.0.0.0:9001
+      - RUSTFS_ACCESS_KEY=rustfsadmin
+      - RUSTFS_SECRET_KEY=rustfsadmin
     ports:
-      - "9000:9000"  # API port
-      - "9001:9001"  # Console port
+      - "9000:9000"  # API endpoint
+      - "9001:9001"  # Console
     volumes:
       - minio_data:/data
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 30s
-      timeout: 20s
-      retries: 3
-  
-  createbuckets:
-    image: minio/mc
-    depends_on:
-      - minio
-    volumes:
-      - ./minio-cors.json:/minio-cors.json
-    entrypoint: >
-      /bin/sh -c "
-      sleep 10;
-        /usr/bin/mc alias set myminio http://minio:9000 minioadmin minioadmin || exit 1;
-        /usr/bin/mc mb myminio/bucket || true;
-        /usr/bin/mc anonymous set public myminio/bucket || exit 1;
-        /usr/bin/mc anonymous set-json /minio-cors.json myminio/bucket || true;
-        echo 'Bucket creation completed successfully';
-      exit 0;
-      "
 
   app:
     build:
@@ -72,8 +56,6 @@ services:
       MINIO_PUBLIC_ENDPOINT: "localhost:9000"
     depends_on:
       db:
-        condition: service_healthy
-      minio:
         condition: service_healthy
 
     restart: on-failure

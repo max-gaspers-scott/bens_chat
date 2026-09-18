@@ -35,9 +35,6 @@ services:
 
 
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile
     image: maxthemerman/bens_chat2-app:latest
     container_name: bens_chat2_app
     ports:

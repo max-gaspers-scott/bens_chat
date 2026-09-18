@@ -54,6 +54,22 @@ const apiFetch = async (url, options = {}) => {
   return response;
 };
 
+export const getSocketUrl = () => {
+  if (process.env.REACT_APP_SOCKET_URL) {
+    return process.env.REACT_APP_SOCKET_URL;
+  }
+
+  if (API_BASE_URL) {
+    return API_BASE_URL;
+  }
+
+  if (typeof window !== 'undefined') {
+    return window.location.origin;
+  }
+
+  return '';
+};
+
 export const api = {
   registerUnauthorizedHandler(handler) {
     unauthorizedHandler = handler;

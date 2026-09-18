@@ -11,6 +11,7 @@ jest.mock('socket.io-client', () => ({
 }));
 
 jest.mock('./api/api', () => ({
+  getSocketUrl: jest.fn(() => 'http://localhost:9821'),
   api: {
     getToken: jest.fn(),
     clearToken: jest.fn(),

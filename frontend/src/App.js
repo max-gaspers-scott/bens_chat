@@ -7,7 +7,7 @@ import ChatList from './components/ChatList';
 import ChatView from './components/ChatView';
 import ResetPassword from './components/ResetPassword';
 import './App.css';
-import { api } from './api/api';
+import { api, getSocketUrl } from './api/api';
 
 const USER_STORAGE_KEY = 'currentUser';
 const DARK_THEME_KEY = 'darkTheme';
@@ -155,9 +155,7 @@ function App() {
   useEffect(() => {
     if (!currentUser) return;
 
-    const socketUrl = window.location.origin.includes('localhost') || window.location.origin.includes('127.0.0.1')
-      ? 'http://localhost:8081'
-      : window.location.origin;
+    const socketUrl = getSocketUrl();
 
     const socket = io(socketUrl, {
       path: '/socket.io',

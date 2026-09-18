@@ -9,60 +9,44 @@ services:
     volumes:
       - bens_chat2_postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-dbuser} -d ${POSTGRES_DB:-data}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 10
 
-  minio:
-    image: minio/minio:latest
-    container_name: bens_chat2_minio
-    command: server /data --console-address ":9001"
+
+  rustfs:
+    image: rustfs/rustfs:1.0.0-alpha.89
+    container_name: bens_chat2_rustfs
+    hostname: rustfs
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      - RUSTFS_VOLUMES=/data
+      - RUSTFS_ADDRESS=0.0.0.0:9000
+      - RUSTFS_CONSOLE_ENABLE=true
+      - RUSTFS_CONSOLE_ADDRESS=0.0.0.0:9001
+      - RUSTFS_ACCESS_KEY=rustfsadmin
+      - RUSTFS_SECRET_KEY=rustfsadmin
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "9000:9000"  # API endpoint
+      - "9001:9001"  # Console
     volumes:
       - bens_chat2_minio_data:/data
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 30s
-      timeout: 20s
-      retries: 3
 
-  createbuckets:
-    image: minio/mc
-    container_name: bens_chat2_createbuckets
-    depends_on:
-      - minio
-    volumes:
-      - ./minio-cors.json:/minio-cors.json
-    entrypoint: >
-      /bin/sh -c "
-      sleep 10;
-        /usr/bin/mc alias set myminio http://minio:9000 ${MINIO_ROOT_USER:-minioadmin} ${MINIO_ROOT_PASSWORD:-minioadmin} || exit 1;
-        /usr/bin/mc mb myminio/bucket || true;
-        /usr/bin/mc anonymous set public myminio/bucket || exit 1;
-        /usr/bin/mc anonymous set-json /minio-cors.json myminio/bucket || true;
-        echo 'Bucket creation completed successfully';
-      exit 0;
-      "
+
 
   app:
-    image: maxthemerman/bens_chat2-app:0.1.7
+    image: maxthemerman/bens_chat2-app:latest
     container_name: bens_chat2_app
     ports:
       - "9821:8081"
     env_file:
-      - ${APP_ENV_FILE:-./.env}
+      - ${APP_ENV_FILE}
     depends_on:
       db:
         condition: service_healthy
     restart: on-failure
     healthcheck:
-      test: ["CMD", "wget", "--spider", "http://localhost:8081/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
       interval: 10s
       timeout: 5s
       retries: 5

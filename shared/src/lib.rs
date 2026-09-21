@@ -107,6 +107,7 @@ pub struct Connect4 {
     pub player2: String,
     pub name: String,
     pub grid: Vec<Col>,
+    pub winner: Winner,
 }
 
 impl Connect4 {
@@ -118,6 +119,7 @@ impl Connect4 {
             player2: player2,
             grid: board,
             turn: Chip::Red,
+            winner: Winner::GameStillGoing,
         }
     }
     fn switch_turn(self) -> Connect4 {
@@ -130,6 +132,21 @@ impl Connect4 {
             turn: new_turn,
             ..self
         }
+    }
+    pub fn right_n(&self, over: usize, up: usize, n: usize) -> Option<Chip> {
+        let g = self.grid.clone();
+        Some(g[over + 1].row[up].clone())
+    }
+    pub fn is_winner(&self, over: usize, up: usize) -> bool {
+        let g = self.grid.clone();
+        let mut count = 0;
+        if let Some(c) = self.right_n(over, up, 1) {
+            match c {
+                Chip::Red => count += 1,
+                _ => {}
+            }
+        }
+        true
     }
     pub fn update(&self, pos: usize, player_name: String) -> Connect4 {
         let player_name = player_name.clone();
@@ -151,7 +168,12 @@ impl Connect4 {
         }
         println!("current turn: {t}");
         new_stat.grid[pos.clone()].row.push(self.turn.clone());
-        let new_stat = new_stat.switch_turn();
+        let up = new_stat.grid[pos.clone()].row.len();
+        let mut new_stat = new_stat.switch_turn();
+
+        if self.is_winner(pos, up) {
+            new_stat.winner = Winner::Player1;
+        }
         new_stat
     }
 }
@@ -174,6 +196,13 @@ impl Default for Col {
     fn default() -> Self {
         Self::new()
     }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub enum Winner {
+    Player1,
+    Player2,
+    GameStillGoing,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]

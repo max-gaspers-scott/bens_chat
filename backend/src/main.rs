@@ -233,7 +233,16 @@ async fn update_connect(
         }
     };
     let board = msg.content;
-    let board = match serde_json::from_value::<Connect4>(board) {
+    let mut board_value = board.clone();
+    if let Some(winner_entry) = board_value.get_mut("winner") {
+        if winner_entry.is_null() {
+            *winner_entry = serde_json::Value::String("GameStillGoing".to_string());
+        }
+    } else {
+        board_value["winner"] = serde_json::Value::String("GameStillGoing".to_string());
+    }
+
+    let board = match serde_json::from_value::<Connect4>(board_value) {
         Ok(c) => c,
         Err(e) => {
             panic!("error converting to Conenct4: {}", e);

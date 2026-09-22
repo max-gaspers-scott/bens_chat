@@ -134,8 +134,13 @@ impl Connect4 {
         }
     }
     pub fn right_n(&self, over: usize, up: usize, n: usize) -> Option<Chip> {
-        let g = self.grid.clone();
-        Some(g[over + 1].row[up].clone())
+        let g = &self.grid;
+        if let Some(col) = g.get(over + n) {
+            if let Some(chip) = col.row.get(up) {
+                return Some(chip.clone());
+            }
+        }
+        None
     }
     pub fn is_winner(&self, over: usize, up: usize) -> bool {
         let g = self.grid.clone();

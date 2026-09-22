@@ -175,6 +175,7 @@ export const api = {
       player2: opponent,
       name: boardName,
       grid,
+      winner: "GameStillGoing",
     };
     const response = await apiFetch(`${API_BASE_URL}/messages`, {
       method: 'POST',

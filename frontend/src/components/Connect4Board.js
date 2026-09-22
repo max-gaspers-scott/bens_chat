@@ -16,7 +16,7 @@ const Connect4Board = memo(function Connect4Board({ msg, currentUser, onMoveSent
   const [error, setError] = useState(null);
   const [sending, setSending] = useState(false);
 
-  const { grid, turn, name } = msg.content;
+  const { grid, turn, name, winner } = msg.content;
 
   // Build a 2D array [row][col] where row 0 is the TOP of the board.
   // col.row[0] is the bottom-most chip (index 0 = bottom, highest index = top).
@@ -66,7 +66,11 @@ const Connect4Board = memo(function Connect4Board({ msg, currentUser, onMoveSent
     <div className="connect4-wrapper">
       <div className="connect4-header">
         <span className="connect4-name">{name}</span>
-        <span className="connect4-turn">{turnLabel}'s turn</span>
+        {winner && winner !== "GameStillGoing" ? (
+          <span className="connect4-winner">Winner: {winner === 'Player1' ? '🔴 Red' : '🟡 Yellow'}</span>
+        ) : (
+          <span className="connect4-turn">{turnLabel}'s turn</span>
+        )}
       </div>
 
       <div className="connect4-board" role="grid" aria-label={`Connect4 board: ${name}`}>

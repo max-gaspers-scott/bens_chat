@@ -1,5 +1,6 @@
-import { memo, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import { api } from '../api/api';
+import Confetti from './Confetti';
 
 const ROWS = 6;
 const COLS = 7;
@@ -15,8 +16,24 @@ const COLS = 7;
 const Connect4Board = memo(function Connect4Board({ msg, currentUser, onMoveSent }) {
   const [error, setError] = useState(null);
   const [sending, setSending] = useState(false);
+  const [showConfetti, setShowConfetti] = useState(false);
+  const prevWinnerRef = useRef(undefined);
 
   const { grid, turn, name, winner } = msg.content;
+  const isGameOver = Boolean(winner) && winner !== 'GameStillGoing';
+
+  // Celebrate the moment a winner is declared (only on the transition).
+  useEffect(() => {
+    if (prevWinnerRef.current === undefined) {
+      prevWinnerRef.current = winner;
+      return;
+    }
+    const wasOver = prevWinnerRef.current && prevWinnerRef.current !== 'GameStillGoing';
+    if (!wasOver && isGameOver) {
+      setShowConfetti(true);
+    }
+    prevWinnerRef.current = winner;
+  }, [winner, isGameOver]);
 
   // Build a 2D array [row][col] where row 0 is the TOP of the board.
   // col.row[0] is the bottom-most chip (index 0 = bottom, highest index = top).
@@ -34,7 +51,7 @@ const Connect4Board = memo(function Connect4Board({ msg, currentUser, onMoveSent
   }
 
   const handleColumnClick = async (colIndex) => {
-    if (sending) return;
+    if (sending || isGameOver) return;
 
     // Check if the column is full
     const col = grid[colIndex];
@@ -83,9 +100,9 @@ const Connect4Board = memo(function Connect4Board({ msg, currentUser, onMoveSent
                 key={c}
                 className="connect4-col-btn"
                 onClick={() => handleColumnClick(c)}
-                disabled={sending || full}
+                disabled={sending || full || isGameOver}
                 aria-label={`Drop in column ${c + 1}${full ? ' (full)' : ''}`}
-                title={full ? 'Column full' : `Drop in column ${c + 1}`}
+                title={full ? 'Column full' : isGameOver ? 'Game over' : `Drop in column ${c + 1}`}
               >
                 ▼
               </button>
@@ -111,6 +128,8 @@ const Connect4Board = memo(function Connect4Board({ msg, currentUser, onMoveSent
       </div>
 
       {error && <p className="connect4-error">{error}</p>}
+
+      <Confetti active={showConfetti} />
     </div>
   );
 });

@@ -488,20 +488,7 @@ async fn post_message(
     let query =
         "INSERT INTO messages (sender_name, parent_id, content) VALUES ($1, $2, $3) RETURNING *";
     if let Some(parent) = payload.parent_id {
-        // match is_user_in_chat(&pool, &auth_user.username, &parent).await {
-        //     Ok(true) => {}
-        //     Ok(false) => return Json(json!({"status": "error", "error": "Forbidden"})),
-        //     Err(e) => return Json(json!({"status": "error", "error": e.to_string()})),
-        // }
-
-        let query = "INSERT INTO messages (sender_name, parent_id, content) VALUES ($1, $2, $3) RETURNING *";
-
-        let q = sqlx::query_as::<_, Message>(&query)
-            .bind(auth_user.username)
-            .bind(payload.parent_id)
-            .bind(payload.content);
-
-        let result = q.fetch_one(&pool).await;
+        let result = post_nested_message(&auth_user, &payload, &pool).await;
 
         match result {
             Ok(ref value) => {
@@ -580,103 +567,21 @@ async fn post_message(
         Json(msg_val)
     }
 }
-#[derive(Deserialize, Debug, Serialize)]
-struct Part {
-    text: String,
-}
+use std::error::Error;
+async fn post_nested_message(
+    auth_user: &AuthUser,
+    payload: &Message,
+    pool: &PgPool,
+) -> Result<Message, sqlx::Error> {
+    let query =
+        "INSERT INTO messages (sender_name, parent_id, content) VALUES ($1, $2, $3) RETURNING *";
 
-#[derive(Deserialize, Debug, Serialize)]
-struct Content {
-    parts: Vec<Part>,
-}
+    let q = sqlx::query_as::<_, Message>(&query)
+        .bind(auth_user.username.clone())
+        .bind(payload.parent_id.clone())
+        .bind(payload.content.clone());
 
-#[derive(Deserialize, Debug, Serialize)]
-struct Candidate {
-    content: ContentResponse,
-}
-
-#[derive(Deserialize, Debug, Serialize)]
-struct ContentResponse {
-    parts: Vec<PartResponse>,
-}
-
-#[derive(Deserialize, Debug, Serialize)]
-struct PartResponse {
-    text: String,
-}
-
-#[derive(Deserialize, Debug, Serialize)]
-struct GenerateContentResponse {
-    contents: Vec<Content>,
-}
-
-#[derive(Deserialize, Debug, Serialize)]
-struct GeminiRespons {
-    candidates: Vec<Candidate>,
-}
-
-async fn gemini(message: &str) -> Result<String, reqwest::Error> {
-    dotenv().ok();
-    let api_key_name = "GEMINI_API_KEY";
-    let api_key: String = match env::var(api_key_name) {
-        Ok(val) => val.trim().to_string(),
-        Err(e) => {
-            println!("couldn't interpret {api_key_name}: {e}");
-            format!("{}", e)
-        }
-    };
-
-    let url = format!(
-        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={}",
-        api_key
-    );
-
-    // 3. Construct the Request Body using the Serde structs
-    let request_body = GenerateContentResponse {
-        contents: vec![Content {
-            parts: vec![Part {
-                text: message.to_string(),
-            }],
-        }],
-    };
-
-    let client = reqwest::Client::new();
-    let response = client
-        .post(&url)
-        .header(CT, "application/json")
-        .header(ACCEPT, "application/json")
-        // reqwest::Client::post() automatically uses the body's Serialize implementation
-        // and sets the Content-Length header when sending the request body.
-        .json(&request_body)
-        .send()
-        .await?;
-
-    let text = if response.status().is_success() {
-        // Deserialize the JSON response into our Rust struct
-        let json_response: GeminiRespons = response.json().await?;
-
-        // TODO: should not return "" instead do better error handling
-        // program should not continue with empty string is something goes wrong at this step
-        if let Some(candidate) = json_response.candidates.first() {
-            if let Some(part) = candidate.content.parts.first() {
-                part.text.to_string()
-            } else {
-                println!("could not get part.text from api");
-                "".to_string()
-            }
-        } else {
-            println!("Response was successful but had no candidates.");
-            "".to_string()
-        }
-    } else {
-        eprintln!("\n❌ API Request Failed!");
-        eprintln!("Status: {}", response.status());
-        eprintln!("Body: {}", response.text().await?);
-        "".to_string()
-    };
-
-    println!("Generated text: {}", text);
-    Ok(text)
+    q.fetch_one(pool).await
 }
 
 pub async fn post_user(
@@ -751,33 +656,6 @@ async fn post_chat(
         Err(e) => Json(json!({"res": format!("error: {}", e)})),
     }
 }
-
-// async fn post_user_chat(
-//     Extension(auth_user): Extension<AuthUser>,
-//     extract::State(pool): extract::State<PgPool>,
-//     Json(payload): Json<UserChat>,
-// ) -> Json<Value> {
-//     if payload.user_id != auth_user.user_id {
-//         match is_user_in_chat(&pool, auth_user.user_id, payload.chat_id).await {
-//             Ok(true) => {}
-//             Ok(false) => return Json(json!({"res": "error: forbidden"})),
-//             Err(e) => return Json(json!({"res": format!("error: {}", e)})),
-//         }
-//     }
-//
-//     let result = sqlx::query_as::<_, UserChat>(
-//         "INSERT INTO user_chats (user_id, chat_id) VALUES ($1, $2) RETURNING *",
-//     )
-//     .bind(payload.user_id)
-//     .bind(payload.chat_id)
-//     .fetch_one(&pool)
-//     .await;
-//
-//     match result {
-//         Ok(value) => Json(json!({"res": "success", "data": value})),
-//         Err(e) => Json(json!({"res": format!("error: {}", e)})),
-//     }
-// }
 pub async fn post_chat_participant(
     Extension(auth_user): Extension<AuthUser>,
     extract::State(pool): extract::State<PgPool>,

@@ -510,61 +510,7 @@ async fn post_message(
             Err(e) => Json(json!({"res": format!("error: {}", e)})),
         }
     } else {
-        let mut tx = match pool.begin().await {
-            Ok(tx) => tx,
-            Err(e) => return Json(json!({"res": format!("error: {}", e)})),
-        };
-
-        let message_query = "INSERT INTO messages (sender_name, parent_id, content) VALUES ($1, NULL, $2) RETURNING *";
-        let message_result = sqlx::query_as::<_, Message>(&message_query)
-            .bind(&auth_user.username)
-            .bind(&payload.content)
-            .fetch_one(&mut *tx)
-            .await;
-
-        let message = match message_result {
-            Ok(m) => m,
-            Err(e) => {
-                let _ = tx.rollback().await;
-                return Json(json!({"res": format!("error: {}", e)}));
-            }
-        };
-
-        //TODO: get rid of the concepts of chats from the DB entirely. a 1 to 1 onto mapping of
-        //message id to another uuid is not helpful
-        let chat_id = message.message_id;
-
-        let participant_query =
-            "INSERT INTO chat_participants (chat_id, user_name) VALUES ($1, $2)";
-        if let Err(e) = sqlx::query(&participant_query)
-            .bind(chat_id)
-            .bind(&auth_user.username)
-            .execute(&mut *tx)
-            .await
-        {
-            let _ = tx.rollback().await;
-            return Json(json!({"res": format!("error: {}", e)}));
-        }
-
-        if let Err(e) = tx.commit().await {
-            return Json(json!({"res": format!("error: {}", e)}));
-        }
-
-        let pool_clone = pool.clone();
-        let io_clone = io.clone();
-        let msg_val = json!({"res": "success", "data": message});
-        let msg_id = message.message_id;
-        let msg_val_clone = msg_val.clone();
-        tokio::spawn(async move {
-            if let Ok(root_id) = get_root_chat_id(&pool_clone, msg_id).await {
-                io_clone
-                    .to(root_id.to_string())
-                    .emit("new_message", &msg_val_clone)
-                    .ok();
-            }
-        });
-
-        Json(msg_val)
+        post_root_message(&auth_user, &payload, &pool).await
     }
 }
 use std::error::Error;
@@ -582,6 +528,64 @@ async fn post_nested_message(
         .bind(payload.content.clone());
 
     q.fetch_one(pool).await
+}
+
+async fn post_root_message(auth_user: &AuthUser, payload: &Message, pool: &PgPool) -> Json<Value> {
+    let mut tx = match pool.begin().await {
+        Ok(tx) => tx,
+        Err(e) => return Json(json!({"res": format!("error: {}", e)})),
+    };
+
+    let message_query =
+        "INSERT INTO messages (sender_name, parent_id, content) VALUES ($1, NULL, $2) RETURNING *";
+    let message_result = sqlx::query_as::<_, Message>(&message_query)
+        .bind(&auth_user.username)
+        .bind(&payload.content)
+        .fetch_one(&mut *tx)
+        .await;
+
+    let message = match message_result {
+        Ok(m) => m,
+        Err(e) => {
+            let _ = tx.rollback().await;
+            return Json(json!({"res": format!("error: {}", e)}));
+        }
+    };
+
+    //TODO: get rid of the concepts of chats from the DB entirely. a 1 to 1 onto mapping of
+    //message id to another uuid is not helpful
+    let chat_id = message.message_id;
+
+    let participant_query = "INSERT INTO chat_participants (chat_id, user_name) VALUES ($1, $2)";
+    if let Err(e) = sqlx::query(&participant_query)
+        .bind(chat_id)
+        .bind(&auth_user.username)
+        .execute(&mut *tx)
+        .await
+    {
+        let _ = tx.rollback().await;
+        return Json(json!({"res": format!("error: {}", e)}));
+    }
+
+    if let Err(e) = tx.commit().await {
+        return Json(json!({"res": format!("error: {}", e)}));
+    }
+
+    let pool_clone = pool.clone();
+    let io_clone = io.clone();
+    let msg_val = json!({"res": "success", "data": message});
+    let msg_id = message.message_id;
+    let msg_val_clone = msg_val.clone();
+    tokio::spawn(async move {
+        if let Ok(root_id) = get_root_chat_id(&pool_clone, msg_id).await {
+            io_clone
+                .to(root_id.to_string())
+                .emit("new_message", &msg_val_clone)
+                .ok();
+        }
+    });
+
+    Json(msg_val)
 }
 
 pub async fn post_user(

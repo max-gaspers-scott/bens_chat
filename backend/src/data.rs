@@ -34,6 +34,9 @@ pub async fn post_nested_message(
 
     q.fetch_one(pool).await
 }
+
+// a message impliments  #[derive(Debug, Clone, Serialize,
+// Deserialize)], but  Value dosne yet and the compiler expects both values or resut to be serializable
 pub async fn post_root_message(
     auth_user: &AuthUser,
     payload: &Message,

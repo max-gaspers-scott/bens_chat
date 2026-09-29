@@ -516,18 +516,19 @@ async fn post_message(
             Ok(_) => {
                 let pool_clone = pool.clone();
                 let io_clone = io.clone();
-                let msg_val = json!({"res": "success", "data": message});
-                let msg_id = message.message_id;
+                let msg_val = json!({"res": "success", "data": message.clone().unwrap()});
+                let msg_id = message.unwrap().message_id;
                 let msg_val_clone = msg_val.clone();
+                let value = msg_val_clone.clone();
                 tokio::spawn(async move {
                     if let Ok(root_id) = get_root_chat_id(&pool_clone, msg_id).await {
                         io_clone
                             .to(root_id.to_string())
-                            .emit("new_message", &msg_val_clone)
+                            .emit("new_message", &value)
                             .ok();
                     }
                 });
-                Value(msg_val_clone)
+                Json::from(msg_val_clone)
             }
             Err(json) => return json,
         }

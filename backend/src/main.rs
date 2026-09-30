@@ -1,8 +1,8 @@
 mod data;
 use axum::extract::connect_info;
-// use bens_chat_shared::{
-//     Chip, Connect4, ImgMessage, Position, SendableContent, TextMessage, TitleMessage,
-// };
+use bens_chat_shared::{
+    Chip, Connect4, ImgMessage, Position, SendableContent, TextMessage, TitleMessage,
+};
 use dotenv::dotenv;
 use minio_rsc::client::PresignedArgs;
 use minio_rsc::provider::StaticProvider;

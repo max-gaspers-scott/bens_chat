@@ -1,5 +1,8 @@
 mod structs;
-use crate::structs::{Connect4, SendableContent::Con4, Showable, *};
+use crate::{
+    SlashCommands::NotValid,
+    structs::{Connect4, SendableContent::Con4, Showable, *},
+};
 use bens_chat_shared::Position;
 use clap::builder::Str;
 use cool_cli_input::get_input;
@@ -97,16 +100,22 @@ enum SlashCommands {
     Exit,
     Subchat,
     NewConn4,
+    UpdateConn4,
+    NotValid,
 }
 fn str_to_comand(input: &str) -> SlashCommands {
-    let s = if inptu == "/update" {
+    let s = if input == "/update" {
         SlashCommands::Update
     } else if input == "/new-connet3" {
         SlashCommands::NewConn4
     } else if input == "/subchat" {
         SlashCommands::Subchat
-    } else {
+    } else if input == "/update-baord" {
+        SlashCommands::UpdateConn4
+    } else if input == "/exit" {
         SlashCommands::Exit
+    } else {
+        SlashCommands::NotValid
     };
     s
 }
@@ -308,109 +317,115 @@ impl Window {
                 parent_id: Some(chat_id),
                 content,
             };
+            // TODO: make match statment on input
 
-            if input == SlashCommands::Subchat {
-                messages = get_and_show_msg(&login_stuff, &chat_id).await;
-                continue;
-            }
-
-            if message.trim() == "/exit" {
-                print!("{}[2J{}[1;1H", 27 as char, 27 as char);
-
-                return Action::GotoChats;
-            }
-            if message.trim() == "/subchat" {
-                let mut buff = String::new();
-                println!("what sub chat do you want to see");
-
-                std::io::stdin().read_line(&mut buff).unwrap();
-                let input = buff.trim();
-                for m in &messages {
-                    let cont = m.content.get_content();
-                    let id = m.message_id;
-                    if cont == input {
-                        return Action::GotoConversation { chat_id: id };
-                    }
-                }
-                println!("message not found");
-            }
-            if message.trim() == "/newConn4" {
-                let mut name_buff = String::new();
-                println!("whats the board name");
-                std::io::stdin().read_line(&mut name_buff).unwrap();
-                let mut aponant_buff = String::new();
-                println!("whats the other players name");
-                std::io::stdin().read_line(&mut aponant_buff).unwrap();
-
-                let name_buff = name_buff.trim().to_string();
-                let new_bard = Connect4::new(name_buff, login_stuff.username.clone(), aponant_buff);
-                let board_messge = SendMesage {
-                    content: serde_json::to_value(new_bard).unwrap(),
-                    ..msg
-                };
-
-                send_message(login_stuff, &board_messge).await;
-                continue;
-            }
-
-            // if message.trim() == "/update-message" {
-            //     let mut name_buff = String::new();
-            //     println!("what was the name of the message to update");
-            //     std::io::stdin().read_line(&mut name_buff).unwrap();
-            //     let msg_name = name_buff.trim();
-            //
-            //     let mut buff = String::new();
-            //
-            //     println!("what is the new content");
-            //     std::io::stdin().read_line(&mut buff).unwrap();
-            //     let input = buff.trim();
-            //     let content = serde_json::json!({
-            //           "content": { "text": input.trim() }
-            //     });
-            //
-            //     let update_res =
-            //         update_message(login_stuff, &content, String::from(msg_name)).await;
-            //     println!("messge name: {msg_name}");
-            //     println!("new text: {input}");
-            //
-            //     println!("contenet: {:?}", content);
-            //
-            //     match update_res {
-            //         Ok(_) => {}
-            //         Err(e) => println!("error updeteing message: {e}"),
-            //     }
-            //
-            //     continue;
-            // }
-            if message.trim() == "/update-board" {
-                let mut name_buff = String::new();
-                println!("what was the name of the message to update");
-                std::io::stdin().read_line(&mut name_buff).unwrap();
-                let msg_name = name_buff.trim();
-
-                let mut buff = String::new();
-
-                println!("pos");
-                std::io::stdin().read_line(&mut buff).unwrap();
-                let position = buff.trim().parse().expect("not a number");
-
-                let update_res = update_connect4(login_stuff, position, name_buff).await;
-
-                match update_res {
+            if !message.trim().starts_with("/") {
+                match send_message(login_stuff, &msg).await {
                     Ok(_) => {}
-                    Err(e) => println!("error updeteing message: {e}"),
+                    Err(e) => print!("error sendimg message: {e}"),
+                }
+            }
+
+            match input {
+                SlashCommands::Update => {
+                    messages = get_and_show_msg(&login_stuff, &chat_id).await;
+                    continue;
                 }
 
-                continue;
-            }
-            if message.trim().starts_with("/") {
-                println!("not a valid / command");
-                continue;
-            }
+                SlashCommands::Exit => {
+                    print!("{}[2J{}[1;1H", 27 as char, 27 as char);
 
-            match send_message(login_stuff, &msg).await {
-                Ok(_) => {}
-                Err(e) => print!("error sendimg message: {e}"),
+                    return Action::GotoChats;
+                }
+                SlashCommands::Subchat => {
+                    let mut buff = String::new();
+                    println!("what sub chat do you want to see");
+
+                    std::io::stdin().read_line(&mut buff).unwrap();
+                    let input = buff.trim();
+                    for m in &messages {
+                        let cont = m.content.get_content();
+                        let id = m.message_id;
+                        if cont == input {
+                            return Action::GotoConversation { chat_id: id };
+                        }
+                    }
+                    println!("message not found");
+                }
+                SlashCommands::NewConn4 => {
+                    let mut name_buff = String::new();
+                    println!("whats the board name");
+                    std::io::stdin().read_line(&mut name_buff).unwrap();
+                    let mut aponant_buff = String::new();
+                    println!("whats the other players name");
+                    std::io::stdin().read_line(&mut aponant_buff).unwrap();
+
+                    let name_buff = name_buff.trim().to_string();
+                    let new_bard =
+                        Connect4::new(name_buff, login_stuff.username.clone(), aponant_buff);
+                    let board_messge = SendMesage {
+                        content: serde_json::to_value(new_bard).unwrap(),
+                        ..msg
+                    };
+
+                    send_message(login_stuff, &board_messge).await;
+                    continue;
+                }
+
+                // input == SlashCommands::fdsa {
+                //     let mut name_buff = String::new();
+                //     println!("what was the name of the message to update");
+                //     std::io::stdin().read_line(&mut name_buff).unwrap();
+                //     let msg_name = name_buff.trim();
+                //
+                //     let mut buff = String::new();
+                //
+                //     println!("what is the new content");
+                //     std::io::stdin().read_line(&mut buff).unwrap();
+                //     let input = buff.trim();
+                //     let content = serde_json::json!({
+                //           "content": { "text": input.trim() }
+                //     });
+                //
+                //     let update_res =
+                //         update_message(login_stuff, &content, String::from(msg_name)).await;
+                //     println!("messge name: {msg_name}");
+                //     println!("new text: {input}");
+                //
+                //     println!("contenet: {:?}", content);
+                //
+                //     match update_res {
+                //         Ok(_) => {}
+                //         Err(e) => println!("error updeteing message: {e}"),
+                //     }
+                //
+                //     continue;
+                // }
+                SlashCommands::UpdateConn4 => {
+                    let mut name_buff = String::new();
+                    println!("what was the name of the message to update");
+                    std::io::stdin().read_line(&mut name_buff).unwrap();
+                    let msg_name = name_buff.trim();
+
+                    let mut buff = String::new();
+
+                    println!("pos");
+                    std::io::stdin().read_line(&mut buff).unwrap();
+                    let position = buff.trim().parse().expect("not a number");
+
+                    let update_res = update_connect4(login_stuff, position, name_buff).await;
+
+                    match update_res {
+                        Ok(_) => {}
+                        Err(e) => println!("error updeteing message: {e}"),
+                    }
+
+                    continue;
+                }
+                SlashCommands::NotValid => {
+                    println!("not a valid / command");
+                    continue;
+                }
             }
         }
     }

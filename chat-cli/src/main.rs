@@ -13,22 +13,22 @@ use reqwest::Response;
 use reqwest::{self, Client, Request};
 use serde::Deserialize;
 use serde_json::json;
-use std::collections::HashMap;
-use std::fs::File;
 use std::fs::OpenOptions;
 use std::future::Future;
 use std::io::Write;
 use std::thread::AccessError;
 use std::time::Duration;
 use std::{clone, io::Read};
+use std::{collections::HashMap, vec};
+use std::{fs::File, str::SplitAsciiWhitespace};
 use termimad::{print_inline, print_text};
 use uuid::Uuid;
 use viuer::print;
 
 // should be in env, but this will work for now
 // const PORT: u32 = 8081;
-// const BASE_URL: &str = "http://localhost:8081"; //9821
-const BASE_URL: &str = "https://bens-chat.team-stingray.com";
+const BASE_URL: &str = "http://localhost:8081"; //9821
+// const BASE_URL: &str = "https://bens-chat.team-stingray.com";
 
 use std::sync::RwLock;
 
@@ -91,6 +91,26 @@ struct Window {
     state: Stats,
     login: LoginInfo,
 }
+
+enum SlashCommands {
+    Update,
+    Exit,
+    Subchat,
+    NewConn4,
+}
+fn str_to_comand(input: &str) -> SlashCommands {
+    let s = if inptu == "/update" {
+        SlashCommands::Update
+    } else if input == "/new-connet3" {
+        SlashCommands::NewConn4
+    } else if input == "/subchat" {
+        SlashCommands::Subchat
+    } else {
+        SlashCommands::Exit
+    };
+    s
+}
+
 impl Window {
     fn new() -> Window {
         Window {
@@ -264,6 +284,7 @@ impl Window {
             }
         }
     }
+
     async fn handel_conversation(&mut self, chat_id: Uuid) -> Action {
         let login_stuff = match &self.login {
             LoginInfo::Loggedin { info } => Some(info),
@@ -277,6 +298,7 @@ impl Window {
             let mut messages = get_and_show_msg(&login_stuff, &chat_id).await;
             println!("------------------");
             let message = get_input("your message: ");
+            let input = str_to_comand(&message);
 
             let content = serde_json::json!({
                 "text": message.trim(),
@@ -287,7 +309,7 @@ impl Window {
                 content,
             };
 
-            if message.trim() == "/update" {
+            if input == SlashCommands::Subchat {
                 messages = get_and_show_msg(&login_stuff, &chat_id).await;
                 continue;
             }
@@ -381,6 +403,10 @@ impl Window {
 
                 continue;
             }
+            if message.trim().starts_with("/") {
+                println!("not a valid / command");
+                continue;
+            }
 
             match send_message(login_stuff, &msg).await {
                 Ok(_) => {}
@@ -431,9 +457,12 @@ async fn get_messages(
     let message_responce: MessageResponce = serde_json::from_str(&text)
         .map_err(|e| {
             println!("JSON parsing error in get_messages: {}", e);
-            panic!("Failed to parse messages JSON");
+            // Message::default()
         })
-        .unwrap();
+        .unwrap_or_else(|_| MessageResponce {
+            payload: vec![],
+            status: "faild".to_string(),
+        });
 
     Ok(message_responce.payload)
 }
@@ -453,9 +482,11 @@ async fn get_chats(user_info: &LoginPayload) -> Result<ChatResponce, reqwest::Er
     let chats: ChatResponce = serde_json::from_str(&text)
         .map_err(|e| {
             println!("JSON parsing error in get_chats: {}", e);
-            panic!("Failed to parse chats JSON");
         })
-        .unwrap();
+        .unwrap_or(ChatResponce {
+            payload: vec![],
+            status: "faild".to_string(),
+        });
 
     Ok(chats)
 }

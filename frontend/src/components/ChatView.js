@@ -113,6 +113,7 @@ function ChatView({ chatId, currentUser, onSelectChat, onToggleSidebar, sidebarO
     chatId ? [{ id: chatId, label: 'Chat' }] : []
   );
   const messagesEndRef = useRef(null);
+  const prevMessagesRef = useRef([]);
 
   const currentParent = parentStack.length ? parentStack[parentStack.length - 1] : null;
   const currentParentId = currentParent ? currentParent.id : null;
@@ -193,11 +194,18 @@ function ChatView({ chatId, currentUser, onSelectChat, onToggleSidebar, sidebarO
     setParentStack((stack) => stack.slice(0, index + 1));
   };
 
-  // Scroll to bottom when messages change
+  // Scroll to bottom only when new messages are added (not when existing messages update, e.g. Connect4 moves)
   useEffect(() => {
-    if (messagesEndRef.current) {
+    if (!messagesEndRef.current) return;
+
+    const prev = prevMessagesRef.current;
+    const isNewMessage = messages.length > prev.length ||
+      (messages.length === prev.length && messages.some((msg, i) => msg.message_id !== prev[i]?.message_id));
+
+    if (isNewMessage) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
+    prevMessagesRef.current = messages;
   }, [messages]);
 
   if (!chatId) {

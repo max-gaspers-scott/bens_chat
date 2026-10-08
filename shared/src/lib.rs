@@ -32,6 +32,18 @@ pub struct Message<C = serde_json::Value> {
     #[serde(default)]
     pub sent_at: chrono::DateTime<chrono::Utc>,
 }
+// use chrono::prelude::Utc;
+// impl Message {
+//     pub fn default(self) -> Message {
+//         Message {
+//             message_id: uuid::Uuid::new_v4(),
+//             sender_name: "default".to_string(),
+//             parent_id: Some(uuid::Uuid::new_v4()),
+//             content: serde_json::json!({"text": "default".to_string()}),
+//             sent_at: Utc::now(),
+//         }
+//     }
+// }
 
 /// The body sent from the CLI when posting a new message.
 #[derive(Debug, Serialize, Deserialize)]

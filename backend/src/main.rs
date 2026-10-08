@@ -1,4 +1,5 @@
 mod data;
+use axum::debug_handler;
 use axum::extract::connect_info;
 use bens_chat_shared::{
     Chip, Connect4, ImgMessage, Position, SendableContent, TextMessage, TitleMessage,
@@ -83,6 +84,7 @@ fn build_cors_layer() -> CorsLayer {
 }
 
 #[tokio::main]
+// #[debug_handler]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("backend starting");
     // Try .env in the current directory first, then fall back to the workspace root (../)
@@ -93,6 +95,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (socket_layer, io) = SocketIo::new_layer();
 
     let db_url = env::var("DATABASE_URL").expect("no db url in env");
+    // debug
+    println!("url: {}", db_url);
+
     let pool = PgPoolOptions::new()
         .max_connections(100)
         .connect(&db_url)

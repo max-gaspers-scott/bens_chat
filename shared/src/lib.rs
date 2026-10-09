@@ -32,6 +32,18 @@ pub struct Message<C = serde_json::Value> {
     #[serde(default)]
     pub sent_at: chrono::DateTime<chrono::Utc>,
 }
+// use chrono::prelude::Utc;
+// impl Message {
+//     pub fn default(self) -> Message {
+//         Message {
+//             message_id: uuid::Uuid::new_v4(),
+//             sender_name: "default".to_string(),
+//             parent_id: Some(uuid::Uuid::new_v4()),
+//             content: serde_json::json!({"text": "default".to_string()}),
+//             sent_at: Utc::now(),
+//         }
+//     }
+// }
 
 /// The body sent from the CLI when posting a new message.
 #[derive(Debug, Serialize, Deserialize)]
@@ -167,7 +179,9 @@ impl Connect4 {
                 break; // Out of bounds in column
             }
         }
-        if count >= 4 { return true; }
+        if count >= 4 {
+            return true;
+        }
 
         // Check in the opposite direction (e.g., left, down, opposite diagonal)
         count = 0;
@@ -187,7 +201,7 @@ impl Connect4 {
                         count += 1;
                     } else {
                         break; // Chips don't match
-                    } 
+                    }
                 } else {
                     break; // Out of bounds in row
                 }
@@ -201,13 +215,21 @@ impl Connect4 {
     // Checks for a win condition after a chip is dropped at (r, c)
     pub fn is_winner(&self, r: usize, c: usize) -> bool {
         // Check horizontal
-        if self.check_direction(r, c, 0, 1) { return true; }
+        if self.check_direction(r, c, 0, 1) {
+            return true;
+        }
         // Check vertical
-        if self.check_direction(r, c, 1, 0) { return true; }
+        if self.check_direction(r, c, 1, 0) {
+            return true;
+        }
         // Check diagonal (top-left to bottom-right)
-        if self.check_direction(r, c, 1, 1) { return true; }
+        if self.check_direction(r, c, 1, 1) {
+            return true;
+        }
         // Check diagonal (top-right to bottom-left)
-        if self.check_direction(r, c, 1, -1) { return true; }
+        if self.check_direction(r, c, 1, -1) {
+            return true;
+        }
 
         false
     }

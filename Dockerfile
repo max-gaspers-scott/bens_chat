@@ -4,7 +4,7 @@
 # -----------------------------------------------------------------------------
 # 1. Builder image: compile the binary in release mode
 # -----------------------------------------------------------------------------
-FROM rust:1.98-slim AS builder
+FROM rust:1.98.1-slim AS builder
 
 # Install build dependencies that some crates (e.g. sqlx / openssl) may need
 RUN apt-get update && apt-get install -y --no-install-recommends pkg-config libssl-dev ca-certificates && rm -rf /var/lib/apt/lists/*

@@ -1,5 +1,8 @@
 mod structs;
-use crate::structs::{Connect4, SendableContent::Con4, Showable, *};
+use crate::{
+    SlashCommands::NotValid,
+    structs::{Connect4, SendableContent::Con4, Showable, *},
+};
 use bens_chat_shared::Position;
 use clap::builder::Str;
 use cool_cli_input::get_input;
@@ -13,22 +16,22 @@ use reqwest::Response;
 use reqwest::{self, Client, Request};
 use serde::Deserialize;
 use serde_json::json;
-use std::collections::HashMap;
-use std::fs::File;
 use std::fs::OpenOptions;
 use std::future::Future;
 use std::io::Write;
 use std::thread::AccessError;
 use std::time::Duration;
 use std::{clone, io::Read};
+use std::{collections::HashMap, vec};
+use std::{fs::File, str::SplitAsciiWhitespace};
 use termimad::{print_inline, print_text};
 use uuid::Uuid;
 use viuer::print;
 
 // should be in env, but this will work for now
 // const PORT: u32 = 8081;
-// const BASE_URL: &str = "http://localhost:8081"; //9821
-const BASE_URL: &str = "https://bens-chat.team-stingray.com";
+const BASE_URL: &str = "http://localhost:8081"; //9821
+// const BASE_URL: &str = "https://bens-chat.team-stingray.com";
 
 use std::sync::RwLock;
 
@@ -91,6 +94,32 @@ struct Window {
     state: Stats,
     login: LoginInfo,
 }
+
+enum SlashCommands {
+    Update,
+    Exit,
+    Subchat,
+    NewConn4,
+    UpdateConn4,
+    NotValid,
+}
+fn str_to_comand(input: &str) -> SlashCommands {
+    let s = if input == "/update" {
+        SlashCommands::Update
+    } else if input == "/new-connet3" {
+        SlashCommands::NewConn4
+    } else if input == "/subchat" {
+        SlashCommands::Subchat
+    } else if input == "/update-baord" {
+        SlashCommands::UpdateConn4
+    } else if input == "/exit" {
+        SlashCommands::Exit
+    } else {
+        SlashCommands::NotValid
+    };
+    s
+}
+
 impl Window {
     fn new() -> Window {
         Window {
@@ -264,6 +293,7 @@ impl Window {
             }
         }
     }
+
     async fn handel_conversation(&mut self, chat_id: Uuid) -> Action {
         let login_stuff = match &self.login {
             LoginInfo::Loggedin { info } => Some(info),
@@ -277,6 +307,7 @@ impl Window {
             let mut messages = get_and_show_msg(&login_stuff, &chat_id).await;
             println!("------------------");
             let message = get_input("your message: ");
+            let input = str_to_comand(&message);
 
             let content = serde_json::json!({
                 "text": message.trim(),
@@ -286,105 +317,115 @@ impl Window {
                 parent_id: Some(chat_id),
                 content,
             };
+            // TODO: make match statment on input
 
-            if message.trim() == "/update" {
-                messages = get_and_show_msg(&login_stuff, &chat_id).await;
-                continue;
-            }
-
-            if message.trim() == "/exit" {
-                print!("{}[2J{}[1;1H", 27 as char, 27 as char);
-
-                return Action::GotoChats;
-            }
-            if message.trim() == "/subchat" {
-                let mut buff = String::new();
-                println!("what sub chat do you want to see");
-
-                std::io::stdin().read_line(&mut buff).unwrap();
-                let input = buff.trim();
-                for m in &messages {
-                    let cont = m.content.get_content();
-                    let id = m.message_id;
-                    if cont == input {
-                        return Action::GotoConversation { chat_id: id };
-                    }
-                }
-                println!("message not found");
-            }
-            if message.trim() == "/newConn4" {
-                let mut name_buff = String::new();
-                println!("whats the board name");
-                std::io::stdin().read_line(&mut name_buff).unwrap();
-                let mut aponant_buff = String::new();
-                println!("whats the other players name");
-                std::io::stdin().read_line(&mut aponant_buff).unwrap();
-
-                let name_buff = name_buff.trim().to_string();
-                let new_bard = Connect4::new(name_buff, login_stuff.username.clone(), aponant_buff);
-                let board_messge = SendMesage {
-                    content: serde_json::to_value(new_bard).unwrap(),
-                    ..msg
-                };
-
-                send_message(login_stuff, &board_messge).await;
-                continue;
-            }
-
-            // if message.trim() == "/update-message" {
-            //     let mut name_buff = String::new();
-            //     println!("what was the name of the message to update");
-            //     std::io::stdin().read_line(&mut name_buff).unwrap();
-            //     let msg_name = name_buff.trim();
-            //
-            //     let mut buff = String::new();
-            //
-            //     println!("what is the new content");
-            //     std::io::stdin().read_line(&mut buff).unwrap();
-            //     let input = buff.trim();
-            //     let content = serde_json::json!({
-            //           "content": { "text": input.trim() }
-            //     });
-            //
-            //     let update_res =
-            //         update_message(login_stuff, &content, String::from(msg_name)).await;
-            //     println!("messge name: {msg_name}");
-            //     println!("new text: {input}");
-            //
-            //     println!("contenet: {:?}", content);
-            //
-            //     match update_res {
-            //         Ok(_) => {}
-            //         Err(e) => println!("error updeteing message: {e}"),
-            //     }
-            //
-            //     continue;
-            // }
-            if message.trim() == "/update-board" {
-                let mut name_buff = String::new();
-                println!("what was the name of the message to update");
-                std::io::stdin().read_line(&mut name_buff).unwrap();
-                let msg_name = name_buff.trim();
-
-                let mut buff = String::new();
-
-                println!("pos");
-                std::io::stdin().read_line(&mut buff).unwrap();
-                let position = buff.trim().parse().expect("not a number");
-
-                let update_res = update_connect4(login_stuff, position, name_buff).await;
-
-                match update_res {
+            if !message.trim().starts_with("/") {
+                match send_message(login_stuff, &msg).await {
                     Ok(_) => {}
-                    Err(e) => println!("error updeteing message: {e}"),
+                    Err(e) => print!("error sendimg message: {e}"),
                 }
-
-                continue;
             }
 
-            match send_message(login_stuff, &msg).await {
-                Ok(_) => {}
-                Err(e) => print!("error sendimg message: {e}"),
+            match input {
+                SlashCommands::Update => {
+                    messages = get_and_show_msg(&login_stuff, &chat_id).await;
+                    continue;
+                }
+
+                SlashCommands::Exit => {
+                    print!("{}[2J{}[1;1H", 27 as char, 27 as char);
+
+                    return Action::GotoChats;
+                }
+                SlashCommands::Subchat => {
+                    let mut buff = String::new();
+                    println!("what sub chat do you want to see");
+
+                    std::io::stdin().read_line(&mut buff).unwrap();
+                    let input = buff.trim();
+                    for m in &messages {
+                        let cont = m.content.get_content();
+                        let id = m.message_id;
+                        if cont == input {
+                            return Action::GotoConversation { chat_id: id };
+                        }
+                    }
+                    println!("message not found");
+                }
+                SlashCommands::NewConn4 => {
+                    let mut name_buff = String::new();
+                    println!("whats the board name");
+                    std::io::stdin().read_line(&mut name_buff).unwrap();
+                    let mut aponant_buff = String::new();
+                    println!("whats the other players name");
+                    std::io::stdin().read_line(&mut aponant_buff).unwrap();
+
+                    let name_buff = name_buff.trim().to_string();
+                    let new_bard =
+                        Connect4::new(name_buff, login_stuff.username.clone(), aponant_buff);
+                    let board_messge = SendMesage {
+                        content: serde_json::to_value(new_bard).unwrap(),
+                        ..msg
+                    };
+
+                    send_message(login_stuff, &board_messge).await;
+                    continue;
+                }
+
+                // input == SlashCommands::fdsa {
+                //     let mut name_buff = String::new();
+                //     println!("what was the name of the message to update");
+                //     std::io::stdin().read_line(&mut name_buff).unwrap();
+                //     let msg_name = name_buff.trim();
+                //
+                //     let mut buff = String::new();
+                //
+                //     println!("what is the new content");
+                //     std::io::stdin().read_line(&mut buff).unwrap();
+                //     let input = buff.trim();
+                //     let content = serde_json::json!({
+                //           "content": { "text": input.trim() }
+                //     });
+                //
+                //     let update_res =
+                //         update_message(login_stuff, &content, String::from(msg_name)).await;
+                //     println!("messge name: {msg_name}");
+                //     println!("new text: {input}");
+                //
+                //     println!("contenet: {:?}", content);
+                //
+                //     match update_res {
+                //         Ok(_) => {}
+                //         Err(e) => println!("error updeteing message: {e}"),
+                //     }
+                //
+                //     continue;
+                // }
+                SlashCommands::UpdateConn4 => {
+                    let mut name_buff = String::new();
+                    println!("what was the name of the message to update");
+                    std::io::stdin().read_line(&mut name_buff).unwrap();
+                    let msg_name = name_buff.trim();
+
+                    let mut buff = String::new();
+
+                    println!("pos");
+                    std::io::stdin().read_line(&mut buff).unwrap();
+                    let position = buff.trim().parse().expect("not a number");
+
+                    let update_res = update_connect4(login_stuff, position, name_buff).await;
+
+                    match update_res {
+                        Ok(_) => {}
+                        Err(e) => println!("error updeteing message: {e}"),
+                    }
+
+                    continue;
+                }
+                SlashCommands::NotValid => {
+                    println!("not a valid / command");
+                    continue;
+                }
             }
         }
     }
@@ -431,9 +472,12 @@ async fn get_messages(
     let message_responce: MessageResponce = serde_json::from_str(&text)
         .map_err(|e| {
             println!("JSON parsing error in get_messages: {}", e);
-            panic!("Failed to parse messages JSON");
+            // Message::default()
         })
-        .unwrap();
+        .unwrap_or_else(|_| MessageResponce {
+            payload: vec![],
+            status: "faild".to_string(),
+        });
 
     Ok(message_responce.payload)
 }
@@ -453,9 +497,11 @@ async fn get_chats(user_info: &LoginPayload) -> Result<ChatResponce, reqwest::Er
     let chats: ChatResponce = serde_json::from_str(&text)
         .map_err(|e| {
             println!("JSON parsing error in get_chats: {}", e);
-            panic!("Failed to parse chats JSON");
         })
-        .unwrap();
+        .unwrap_or(ChatResponce {
+            payload: vec![],
+            status: "faild".to_string(),
+        });
 
     Ok(chats)
 }

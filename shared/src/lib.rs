@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use uuid::Uuid;
 
 // ---------------------------------------------------------------------------
@@ -44,6 +45,37 @@ pub struct Message<C = serde_json::Value> {
 //         }
 //     }
 // }
+
+impl Message {
+    // love curry
+    pub fn create_message_sender(
+        parent_id: uuid::Uuid,
+        user_name: &str,
+    ) -> impl Fn(serde_json::Value) -> SendMessage {
+        move |content: serde_json::Value| SendMessage {
+            sender_name: user_name.to_string(),
+            parent_id: Some(parent_id),
+            content: content,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn create_message_sender() {
+        let parent_uuid = uuid::Uuid::new_v4();
+        let user = "testUser".to_string();
+        let content = serde_json::json!({
+            "test": message,
+        });
+        let create_message = Message::create_message_sender(&self, parent_id, user_name);
+        let message1 = create_message(content);
+        assert_eq!(message1.sender_name, user);
+    }
+}
 
 /// The body sent from the CLI when posting a new message.
 #[derive(Debug, Serialize, Deserialize)]

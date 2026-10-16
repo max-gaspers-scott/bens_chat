@@ -1,3 +1,4 @@
+use reqwest::{self, Client, Request};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
@@ -46,7 +47,43 @@ pub struct Message<C = serde_json::Value> {
 //     }
 // }
 
-impl Message {
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn create_message_sender() {
+        let parent_uuid = uuid::Uuid::new_v4();
+        let user = "testUser".to_string();
+        let content = serde_json::json!({
+            "test": message,
+        });
+        let create_message = Message::create_message_sender(parent_id, user_name);
+        let message1 = create_message(content);
+        assert_eq!(message1.sender_name, user);
+    }
+}
+
+/// The body sent from the CLI when posting a new message.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SendMessage {
+    pub sender_name: String,
+    pub parent_id: Option<uuid::Uuid>,
+    pub content: serde_json::Value,
+}
+
+impl SendMessage {
+    pub async fn send(&self, token: &str, url: &str) -> Result<uuid::Uuid, reqwest::Error> {
+        let client = reqwest::Client::new();
+        let responce = client
+            .post(url)
+            .json(&self.content)
+            .bearer_auth(token)
+            .send()
+            .await?;
+        let parsed_res = responce.json::<Uuid>().await?;
+        Ok(parsed_res)
+    }
     // love curry
     pub fn create_message_sender(
         parent_id: uuid::Uuid,
@@ -60,30 +97,23 @@ impl Message {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn create_message_sender() {
-        let parent_uuid = uuid::Uuid::new_v4();
-        let user = "testUser".to_string();
-        let content = serde_json::json!({
-            "test": message,
-        });
-        let create_message = Message::create_message_sender(&self, parent_id, user_name);
-        let message1 = create_message(content);
-        assert_eq!(message1.sender_name, user);
-    }
-}
-
-/// The body sent from the CLI when posting a new message.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct SendMessage {
-    pub sender_name: String,
-    pub parent_id: Option<uuid::Uuid>,
-    pub content: serde_json::Value,
-}
+// async fn send_message(
+//     login: &LoginPayload,
+//     message: &SendMesage,
+// ) -> Result<PostMsgRes, reqwest::Error> {
+//     let url = format!("{BASE_URL}/messages");
+//     let client = reqwest::Client::new();
+//
+//     let response = client
+//         .post(url)
+//         .json(message)
+//         .bearer_auth(login.token.clone())
+//         .send()
+//         .await?;
+//
+//     let parsed_res = response.json::<PostMsgRes>().await?;
+//     Ok(parsed_res)
+// }
 
 // ---------------------------------------------------------------------------
 // Note

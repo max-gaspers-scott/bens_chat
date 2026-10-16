@@ -16,13 +16,13 @@ use reqwest::Response;
 use reqwest::{self, Client, Request};
 use serde::Deserialize;
 use serde_json::json;
-use std::fs::OpenOptions;
 use std::future::Future;
 use std::io::Write;
 use std::thread::AccessError;
 use std::time::Duration;
 use std::{clone, io::Read};
 use std::{collections::HashMap, vec};
+use std::{fmt::format, fs::OpenOptions};
 use std::{fs::File, str::SplitAsciiWhitespace};
 use termimad::{print_inline, print_text};
 use uuid::Uuid;
@@ -303,7 +303,7 @@ impl Window {
             }
         }
         .unwrap();
-        // let create_message = Message::create_message_sender(chat_id, &login_stuff.username);
+        let create_message = SendMessage::create_message_sender(chat_id, &login_stuff.username);
         loop {
             let mut messages = get_and_show_msg(&login_stuff, &chat_id).await;
             println!("------------------");
@@ -313,18 +313,22 @@ impl Window {
             let content = serde_json::json!({
                 "text": message.trim(),
             });
-            let msg = SendMesage {
-                sender_name: login_stuff.username.clone(),
-                parent_id: Some(chat_id),
-                content,
-            };
+            // let msg = SendMesage {
+            //     sender_name: login_stuff.username.clone(),
+            //     parent_id: Some(chat_id),
+            //     content,
+            // };
             // TODO: make match statment on input
+            let msg = create_message(content);
 
             if !message.trim().starts_with("/") {
-                match send_message(login_stuff, &msg).await {
-                    Ok(_) => {}
-                    Err(e) => print!("error sendimg message: {e}"),
-                }
+                // match send_message(login_stuff, &msg).await {
+                //     Ok(_) => {}
+                //     Err(e) => print!("error sendimg message: {e}"),
+                // }
+                let url = format!("{BASE_URL}/messages");
+                let token = login_stuff.token.clone();
+                msg.send(&token, &url);
             }
 
             match input {

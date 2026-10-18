@@ -1,17 +1,24 @@
 use axum::{
     Extension, Json, Router,
-    extract::{self, Query, Request},
-    http::{
-        HeaderValue, Method, StatusCode,
-        header::{AUTHORIZATION, CONTENT_TYPE},
-        request,
-    },
+    extract::{self, Query},
     middleware,
-    response::{Html, IntoResponse},
     routing::{get, post},
 };
+use bens_chat_shared::{Connect4, Position};
+use bcrypt::{DEFAULT_COST, hash, verify};
+use minio_rsc::client::PresignedArgs;
+use minio_rsc::provider::StaticProvider;
+use minio_rsc::Minio;
+use serde::Deserialize;
+use socketioxide::SocketIo;
+use serde_json::{Value, json};
+use sqlx::PgPool;
+use std::{env, result::Result};
+use uuid::Uuid;
 
-pub async fn serve_routs() -> Result<(), Box<dyn std::error::Error>> {
+use crate::{auth, auth::AuthUser, data, models::*};
+
+pub fn routes() -> Router<PgPool> {
     let public_routes = Router::new()
         .route("/health", get(health))
         .route("/users", post(post_user))
@@ -38,20 +45,7 @@ pub async fn serve_routs() -> Result<(), Box<dyn std::error::Error>> {
         .route("/minio-post", get(get_put_url))
         .layer(middleware::from_fn(auth::authorize));
 
-    let app = Router::new()
-        .merge(public_routes)
-        .merge(protected_routes)
-        .fallback_service(static_service) // 1. Register fallback first
-        .layer(Extension(io))
-        .layer(socket_layer)
-        .layer(build_cors_layer())
-        .with_state(pool);
-
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:8081").await.unwrap();
-
-    axum::serve(listener, app).await.unwrap();
-
-    Ok(())
+    Router::new().merge(public_routes).merge(protected_routes)
 }
 
 //
@@ -81,13 +75,13 @@ async fn update_connect(
       ORDER BY sent_at DESC
       LIMIT 1;
      "#;
-    let result = sqlx::query_as::<_, Message>(&query)
+    let result = sqlx::query_as::<_, Message>(query)
         .bind(&name.name)
         .fetch_one(&pool)
         .await;
     let msg = match result {
         Ok(r) => r,
-        Err(e) => {
+        Err(_e) => {
             panic!("error geting message")
         }
     };
@@ -107,7 +101,7 @@ async fn update_connect(
             panic!("error converting to Conenct4: {}", e);
         }
     };
-    let new_board = board.update(positsion.content.clone(), auth_user.username.clone());
+    let new_board = board.update(positsion.content, auth_user.username.clone());
     let new_board_json = serde_json::to_value(&new_board).unwrap();
 
     let query = r#"
@@ -121,14 +115,14 @@ async fn update_connect(
       LIMIT 1
   );
 "#;
-    let result = sqlx::query(&query)
+    let result = sqlx::query(query)
         .bind(new_board_json)
         .bind(&name.name)
         .bind(auth_user.username)
         .execute(&pool)
         .await;
     match result {
-        Ok(r) => Json(json!({ "status": "success" })),
+        Ok(_r) => Json(json!({ "status": "success" })),
         Err(e) => {
             println!("update error: {e}");
             Json(json!({ "status": "error" }))
@@ -169,14 +163,14 @@ async fn update_message(
   );
 "#;
 
-    let result = sqlx::query(&query)
+    let result = sqlx::query(query)
         .bind(content.content)
         .bind(&name.name)
         .bind(auth_user.username)
         .execute(&pool)
         .await;
     match result {
-        Ok(r) => Json(json!({ "status": "success" })),
+        Ok(_r) => Json(json!({ "status": "success" })),
         Err(e) => {
             println!("update error: {e}");
             Json(json!({ "status": "error" }))
@@ -186,14 +180,14 @@ async fn update_message(
 
 async fn get_users_chats(
     extract::State(pool): extract::State<PgPool>,
-    Extension(auth_user): Extension<AuthUser>,
+    Extension(_auth_user): Extension<AuthUser>,
     Query(username): Query<UsernameQuery>,
 ) -> Json<Value> {
     let query = "SELECT m.message_id, m.sender_name, m.parent_id, m.content, m.sent_at \
                  FROM messages m \
                  JOIN chat_participants cp ON cp.chat_id = m.message_id \
                  WHERE cp.user_name = $1 AND m.parent_id IS NULL";
-    let q = sqlx::query_as::<_, Message>(&query).bind(username.username.clone());
+    let q = sqlx::query_as::<_, Message>(query).bind(username.username.clone());
 
     match q.fetch_all(&pool).await {
         Ok(messages) => {
@@ -301,7 +295,7 @@ async fn get_message_id_sender_name_content_parent(
     }
 
     let query = "SELECT * FROM messages WHERE parent_id = $1 ORDER BY sent_at";
-    let q = sqlx::query_as::<_, Message>(&query).bind(match_val.parent.clone());
+    let q = sqlx::query_as::<_, Message>(query).bind(match_val.parent);
 
     match q.fetch_all(&pool).await {
         Ok(messages) => {
@@ -337,16 +331,16 @@ async fn post_message(
     Extension(io): Extension<SocketIo>,
     Json(payload): Json<Message>,
 ) -> Json<Value> {
-    let text = &payload
+    let _text = &payload
         .content
         .get("text")
         .and_then(|v| v.as_str())
         .unwrap_or("not_gemini");
 
     // change hardcoded number of values
-    let query =
+    let _query =
         "INSERT INTO messages (sender_name, parent_id, content) VALUES ($1, $2, $3) RETURNING *";
-    if let Some(parent) = payload.parent_id {
+    if let Some(_parent) = payload.parent_id {
         let result = data::post_nested_message(&auth_user, &payload, &pool).await;
 
         match result {
@@ -388,7 +382,7 @@ async fn post_message(
                 });
                 Json::from(msg_val_clone)
             }
-            Err(json) => return json,
+            Err(json) => json,
         }
     }
 }
@@ -405,7 +399,7 @@ pub async fn post_user(
     let query = "INSERT INTO users (name, phone_number, email, password_hash) VALUES ($1, $2, $3, $4) RETURNING name, phone_number, email, password_hash";
 
     //// what is bound is wrong
-    let q = sqlx::query_as::<_, User>(&query)
+    let q = sqlx::query_as::<_, User>(query)
         .bind(payload.name)
         .bind(payload.phone_number)
         .bind(payload.email)
@@ -466,14 +460,14 @@ async fn post_chat(
     }
 }
 pub async fn post_chat_participant(
-    Extension(auth_user): Extension<AuthUser>,
+    Extension(_auth_user): Extension<AuthUser>,
     extract::State(pool): extract::State<PgPool>,
     Json(payload): Json<NewChatParticipant>,
 ) -> Json<Value> {
     // change hardcoded number of values
     let query = "INSERT INTO chat_participants (chat_id, user_name) VALUES ($1, $2) RETURNING *";
 
-    let q = sqlx::query_as::<_, NewChatParticipant>(&query)
+    let q = sqlx::query_as::<_, NewChatParticipant>(query)
         .bind(payload.chat_id)
         .bind(payload.user_name);
 

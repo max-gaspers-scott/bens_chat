@@ -1,24 +1,8 @@
 use crate::auth::*;
-use axum::{
-    Extension, Json, Router,
-    extract::{self, Query, Request},
-    http::{
-        HeaderValue, Method, StatusCode,
-        header::{AUTHORIZATION, CONTENT_TYPE},
-        request,
-    },
-    middleware,
-    response::{Html, IntoResponse},
-    routing::{get, post},
-};
+use axum::Json;
 use bens_chat_shared::*;
-use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use socketioxide::{
-    SocketIo,
-    extract::{Data, SocketRef},
-};
-use sqlx::{PgPool, postgres::PgPoolOptions};
+use sqlx::PgPool;
 pub async fn post_nested_message(
     auth_user: &AuthUser,
     payload: &Message,
@@ -27,9 +11,9 @@ pub async fn post_nested_message(
     let query =
         "INSERT INTO messages (sender_name, parent_id, content) VALUES ($1, $2, $3) RETURNING *";
 
-    let q = sqlx::query_as::<_, Message>(&query)
+    let q = sqlx::query_as::<_, Message>(query)
         .bind(auth_user.username.clone())
-        .bind(payload.parent_id.clone())
+        .bind(payload.parent_id)
         .bind(payload.content.clone());
 
     q.fetch_one(pool).await
@@ -49,7 +33,7 @@ pub async fn post_root_message(
 
     let message_query =
         "INSERT INTO messages (sender_name, parent_id, content) VALUES ($1, NULL, $2) RETURNING *";
-    let message_result = sqlx::query_as::<_, Message>(&message_query)
+    let message_result = sqlx::query_as::<_, Message>(message_query)
         .bind(&auth_user.username)
         .bind(&payload.content)
         .fetch_one(&mut *tx)
@@ -68,7 +52,7 @@ pub async fn post_root_message(
     let chat_id = message.message_id;
 
     let participant_query = "INSERT INTO chat_participants (chat_id, user_name) VALUES ($1, $2)";
-    if let Err(e) = sqlx::query(&participant_query)
+    if let Err(e) = sqlx::query(participant_query)
         .bind(chat_id)
         .bind(&auth_user.username)
         .execute(&mut *tx)

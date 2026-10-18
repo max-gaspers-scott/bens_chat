@@ -1,5 +1,5 @@
 // Types shared with the CLI — defined once in bens-chat-shared.
-pub use bens_chat_shared::{Message, Note, User};
+pub use bens_chat_shared::{Message, User};
 
 // Backend-only request/response types (query params, request bodies, etc.)
 pub mod misc;
@@ -9,4 +9,3 @@ pub use misc::*;
 pub mod chat;
 pub use chat::*;
 pub mod new_chat_participant;
-pub use new_chat_participant::*;

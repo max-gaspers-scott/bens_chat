@@ -1,32 +1,22 @@
+mod auth;
 mod data;
+mod models;
 mod routes_serve;
-use axum::debug_handler;
-use axum::extract::connect_info;
-use bens_chat_shared::{
-    Chip, Connect4, ImgMessage, Position, SendableContent, TextMessage, TitleMessage,
+
+use axum::{
+    Extension,
+    http::{
+        HeaderValue, Method, StatusCode,
+        header::{AUTHORIZATION, CONTENT_TYPE},
+    },
+    response::{Html, IntoResponse},
 };
-use dotenv::dotenv;
-use minio_rsc::client::PresignedArgs;
-use minio_rsc::provider::StaticProvider;
-use minio_rsc::{Minio, xml::ser::to_string};
-use reqwest::Client;
-use reqwest::header::{ACCEPT, CONTENT_TYPE as CT};
-use serde::{Deserialize, Serialize};
 use socketioxide::{
     SocketIo,
     extract::{Data, SocketRef},
 };
-use std::cmp::min;
-mod auth;
-mod models;
-
-use crate::{auth::AuthUser, models::*};
-use bcrypt::{DEFAULT_COST, hash, verify};
-use core::{panic, str};
-use serde_json::{Value, json};
-
-use sqlx::{PgPool, postgres::PgPoolOptions};
-use std::{env, result::Result};
+use sqlx::postgres::PgPoolOptions;
+use std::{convert::Infallible, env, result::Result};
 use tower::service_fn;
 use tower_http::{
     cors::{AllowOrigin, Any, CorsLayer},
@@ -40,7 +30,7 @@ fn build_cors_layer() -> CorsLayer {
     let base = CorsLayer::new()
         .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
         .allow_headers(Any)
-        .expose_headers([AUTHORIZATION, CONTENT_TYPE].map(|h| h.into()));
+        .expose_headers([AUTHORIZATION, CONTENT_TYPE].map(|h| h));
 
     match configured_origins.as_deref().map(str::trim) {
         Some("*") => base.allow_origin(Any),
@@ -143,20 +133,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .not_found_service(service_fn(move |_req| {
             let index_path = static_dir_path.join("index.html");
             async move {
-                match tokio::fs::read_to_string(&index_path).await {
-                    Ok(body) => Ok((StatusCode::OK, Html(body)).into_response()),
+                let response = match tokio::fs::read_to_string(&index_path).await {
+                    Ok(body) => (StatusCode::OK, Html(body)).into_response(),
                     Err(err) => {
                         let full_path = std::env::current_dir()
                             .map(|p| p.join(&index_path))
                             .unwrap_or(index_path.clone());
-                        Ok((
+                        (
                             StatusCode::INTERNAL_SERVER_ERROR,
                             format!("Failed to read index.html at {:?}: {}", full_path, err),
                         )
-                            .into_response())
+                            .into_response()
                     }
-                }
+                };
+                // Explicitly define the error type as Infallible.
+                Ok::<_, Infallible>(response)
             }
         }));
-    routes_serve::serve_routs().await
+
+    let app = routes_serve::routes()
+        .fallback_service(static_service) // 1. Register fallback first
+        .layer(Extension(io))
+        .layer(socket_layer)
+        .layer(build_cors_layer())
+        .with_state(pool);
+
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:8081").await?;
+    axum::serve(listener, app).await?;
+
+    Ok(())
 }

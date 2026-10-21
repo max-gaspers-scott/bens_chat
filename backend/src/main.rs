@@ -24,6 +24,8 @@ use tower_http::{
 };
 use uuid::Uuid;
 
+mod axum_handelers;
+
 fn build_cors_layer() -> CorsLayer {
     let configured_origins = env::var("CORS_ALLOWED_ORIGINS").ok();
 

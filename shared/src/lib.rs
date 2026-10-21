@@ -1,6 +1,5 @@
-use reqwest::{self, Client, Request};
+use reqwest::{self};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use uuid::Uuid;
 
 // ---------------------------------------------------------------------------
@@ -92,7 +91,7 @@ impl SendMessage {
         move |content: serde_json::Value| SendMessage {
             sender_name: user_name.to_string(),
             parent_id: Some(parent_id),
-            content: content,
+            content,
         }
     }
 }
@@ -190,14 +189,14 @@ impl Connect4 {
         Connect4 {
             name,
             player1: player1.clone(),
-            player2: player2,
+            player2,
             grid: board,
             turn: Chip::Red,
             winner: Winner::GameStillGoing,
         }
     }
     fn switch_turn(self) -> Connect4 {
-        let new_board = self.clone();
+        let _new_board = self.clone();
         let new_turn = match self.turn {
             Chip::Red => Chip::Yellow,
             Chip::Yellow => Chip::Red,
@@ -218,8 +217,8 @@ impl Connect4 {
         let mut count = 0;
         // Check in one direction (e.g., right, up, diagonal)
         for i in 0..4 {
-            let new_r = (r as isize + i * dr);
-            let new_c = (c as isize + i * dc);
+            let new_r = r as isize + i * dr;
+            let new_c = c as isize + i * dc;
 
             if new_r < 0 || new_c < 0 || new_c >= self.grid.len() as isize {
                 break; // Out of bounds
@@ -248,8 +247,8 @@ impl Connect4 {
         // Check in the opposite direction (e.g., left, down, opposite diagonal)
         count = 0;
         for i in 1..4 {
-            let new_r = (r as isize - i * dr);
-            let new_c = (c as isize - i * dc);
+            let new_r = r as isize - i * dr;
+            let new_c = c as isize - i * dc;
 
             if new_r < 0 || new_c < 0 || new_c >= self.grid.len() as isize {
                 break; // Out of bounds

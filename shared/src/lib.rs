@@ -1,3 +1,4 @@
+use reqwest::{self};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -45,6 +46,23 @@ pub struct Message<C = serde_json::Value> {
 //     }
 // }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn create_message_sender() {
+        let parent_uuid = uuid::Uuid::new_v4();
+        let user = "testUser".to_string();
+        let content = serde_json::json!({
+            "test": message,
+        });
+        let create_message = Message::create_message_sender(parent_id, user_name);
+        let message1 = create_message(content);
+        assert_eq!(message1.sender_name, user);
+    }
+}
+
 /// The body sent from the CLI when posting a new message.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SendMessage {
@@ -52,6 +70,49 @@ pub struct SendMessage {
     pub parent_id: Option<uuid::Uuid>,
     pub content: serde_json::Value,
 }
+
+impl SendMessage {
+    pub async fn send(&self, token: &str, url: &str) -> Result<uuid::Uuid, reqwest::Error> {
+        let client = reqwest::Client::new();
+        let responce = client
+            .post(url)
+            .json(&self.content)
+            .bearer_auth(token)
+            .send()
+            .await?;
+        let parsed_res = responce.json::<Uuid>().await?;
+        Ok(parsed_res)
+    }
+    // love curry
+    pub fn create_message_sender(
+        parent_id: uuid::Uuid,
+        user_name: &str,
+    ) -> impl Fn(serde_json::Value) -> SendMessage {
+        move |content: serde_json::Value| SendMessage {
+            sender_name: user_name.to_string(),
+            parent_id: Some(parent_id),
+            content,
+        }
+    }
+}
+
+// async fn send_message(
+//     login: &LoginPayload,
+//     message: &SendMesage,
+// ) -> Result<PostMsgRes, reqwest::Error> {
+//     let url = format!("{BASE_URL}/messages");
+//     let client = reqwest::Client::new();
+//
+//     let response = client
+//         .post(url)
+//         .json(message)
+//         .bearer_auth(login.token.clone())
+//         .send()
+//         .await?;
+//
+//     let parsed_res = response.json::<PostMsgRes>().await?;
+//     Ok(parsed_res)
+// }
 
 // ---------------------------------------------------------------------------
 // Note
@@ -128,14 +189,14 @@ impl Connect4 {
         Connect4 {
             name,
             player1: player1.clone(),
-            player2: player2,
+            player2,
             grid: board,
             turn: Chip::Red,
             winner: Winner::GameStillGoing,
         }
     }
     fn switch_turn(self) -> Connect4 {
-        let new_board = self.clone();
+        let _new_board = self.clone();
         let new_turn = match self.turn {
             Chip::Red => Chip::Yellow,
             Chip::Yellow => Chip::Red,
@@ -156,8 +217,8 @@ impl Connect4 {
         let mut count = 0;
         // Check in one direction (e.g., right, up, diagonal)
         for i in 0..4 {
-            let new_r = (r as isize + i * dr);
-            let new_c = (c as isize + i * dc);
+            let new_r = r as isize + i * dr;
+            let new_c = c as isize + i * dc;
 
             if new_r < 0 || new_c < 0 || new_c >= self.grid.len() as isize {
                 break; // Out of bounds
@@ -186,8 +247,8 @@ impl Connect4 {
         // Check in the opposite direction (e.g., left, down, opposite diagonal)
         count = 0;
         for i in 1..4 {
-            let new_r = (r as isize - i * dr);
-            let new_c = (c as isize - i * dc);
+            let new_r = r as isize - i * dr;
+            let new_c = c as isize - i * dc;
 
             if new_r < 0 || new_c < 0 || new_c >= self.grid.len() as isize {
                 break; // Out of bounds

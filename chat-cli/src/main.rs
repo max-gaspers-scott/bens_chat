@@ -3,7 +3,7 @@ use crate::{
     SlashCommands::NotValid,
     structs::{Connect4, SendableContent::Con4, Showable, *},
 };
-use bens_chat_shared::Position;
+use bens_chat_shared::{Message, Position};
 use clap::builder::Str;
 use cool_cli_input::get_input;
 use futures_util::{FutureExt, StreamExt};
@@ -16,13 +16,13 @@ use reqwest::Response;
 use reqwest::{self, Client, Request};
 use serde::Deserialize;
 use serde_json::json;
-use std::fs::OpenOptions;
 use std::future::Future;
 use std::io::Write;
 use std::thread::AccessError;
 use std::time::Duration;
 use std::{clone, io::Read};
 use std::{collections::HashMap, vec};
+use std::{fmt::format, fs::OpenOptions};
 use std::{fs::File, str::SplitAsciiWhitespace};
 use termimad::{print_inline, print_text};
 use uuid::Uuid;
@@ -30,8 +30,8 @@ use viuer::print;
 
 // should be in env, but this will work for now
 // const PORT: u32 = 8081;
-const BASE_URL: &str = "http://localhost:8081"; //9821
-// const BASE_URL: &str = "https://bens-chat.team-stingray.com";
+// const BASE_URL: &str = "http://localhost:8081"; //9821
+const BASE_URL: &str = "https://bens-chat.team-stingray.com";
 
 use std::sync::RwLock;
 
@@ -94,7 +94,7 @@ struct Window {
     state: Stats,
     login: LoginInfo,
 }
-
+#[derive(Debug, PartialEq)]
 enum SlashCommands {
     Update,
     Exit,
@@ -303,6 +303,7 @@ impl Window {
             }
         }
         .unwrap();
+        let create_message = SendMessage::create_message_sender(chat_id, &login_stuff.username);
         loop {
             let mut messages = get_and_show_msg(&login_stuff, &chat_id).await;
             println!("------------------");
@@ -312,18 +313,22 @@ impl Window {
             let content = serde_json::json!({
                 "text": message.trim(),
             });
-            let msg = SendMesage {
-                sender_name: login_stuff.username.clone(),
-                parent_id: Some(chat_id),
-                content,
-            };
+            // let msg = SendMesage {
+            //     sender_name: login_stuff.username.clone(),
+            //     parent_id: Some(chat_id),
+            //     content,
+            // };
             // TODO: make match statment on input
+            let msg = create_message(content);
 
             if !message.trim().starts_with("/") {
-                match send_message(login_stuff, &msg).await {
-                    Ok(_) => {}
-                    Err(e) => print!("error sendimg message: {e}"),
-                }
+                // match send_message(login_stuff, &msg).await {
+                //     Ok(_) => {}
+                //     Err(e) => print!("error sendimg message: {e}"),
+                // }
+                let url = format!("{BASE_URL}/messages");
+                let token = login_stuff.token.clone();
+                msg.send(&token, &url);
             }
 
             match input {
@@ -458,7 +463,7 @@ async fn update_connect4(
 async fn get_messages(
     login: &LoginPayload,
     chat_id: &Uuid,
-) -> Result<Vec<Message>, reqwest::Error> {
+) -> Result<Vec<Message<SendableContent>>, reqwest::Error> {
     let url = format!("{BASE_URL}/messages?parent={}", chat_id);
 
     let client = Client::new();
@@ -484,7 +489,7 @@ async fn get_messages(
 
 #[derive(Deserialize)]
 struct ChatResponce {
-    payload: Vec<Message>,
+    payload: Vec<Message<SendableContent>>,
     status: String,
 }
 
@@ -504,19 +509,6 @@ async fn get_chats(user_info: &LoginPayload) -> Result<ChatResponce, reqwest::Er
         });
 
     Ok(chats)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_deserialize_chats() {
-        let raw_json = r#"{"payload":[{"content":{"title":"chat1"},"message_id":"f79f1427-436d-47e2-8c47-aed6ff2bf09d","sender_name":"a","sent_at":"2026-06-23T17:24:23.562447Z"},{"content":{"text":"hi\n"},"message_id":"64f792b3-dc94-424f-be7e-b5cc67ee8541","sender_name":"a","sent_at":"2026-06-23T17:24:31.023501Z"},{"content":{"title":"chat2"},"message_id":"c8ed85b9-2c60-4c87-ba62-21a0212c5433","sender_name":"a","sent_at":"2026-06-23T17:41:58.152064Z"},{"content":{"text":"chat1"},"message_id":"65e3936f-261f-4839-ab06-85244e618eef","sender_name":"a","sent_at":"2026-06-23T19:24:10.642075Z"},{"content":{"text":"chat2"},"message_id":"85d12ced-eac4-4c7b-b924-3e0afafac189","sender_name":"a","sent_at":"2026-06-27T17:22:17.348149Z"},{"content":{"text":"chat3"},"message_id":"80795351-3872-4d3b-98ec-bb3d0a8a350b","sender_name":"a","sent_at":"2026-07-07T19:21:32.874907Z"},{"content":{"text":"oneOff"},"message_id":"3fa5477f-0b03-4138-ace6-3b2093160447","sender_name":"a","sent_at":"2026-07-07T22:52:29.002109Z"},{"content":{"text":"oneOff"},"message_id":"34816fb5-ba05-428b-a83d-e8de04775099","sender_name":"a","sent_at":"2026-07-08T18:22:17.177489Z"},{"content":{"text":"a_b"},"message_id":"130b18ea-4d97-4b45-9e01-b16390b9f158","sender_name":"b","sent_at":"2026-07-09T23:05:56.530122Z"},{"content":{"text":"a_b_test"},"message_id":"f0a65207-39a6-498f-a432-52a3b44f8622","sender_name":"a","sent_at":"2026-07-09T23:06:51.625501Z"},{"content":{"title":"a & b"},"message_id":"30a7bccb-cb81-4dbb-8f0f-4558b1b51763","sender_name":"a","sent_at":"2026-07-16T13:03:45.536795Z"},{"content":{"text":"canata"},"message_id":"bd97da05-07f8-45f3-bc01-226fdb16b615","sender_name":"a","sent_at":"2026-07-18T20:07:13.754509Z"},{"content":{"text":"iter"},"message_id":"8f563e28-5ef2-4025-8caa-ecf362ce077b","sender_name":"a","sent_at":"2026-07-19T16:44:00.876965Z"}],"status":"success"}"#;
-        let chats: ChatResponce = serde_json::from_str(raw_json).unwrap();
-        assert_eq!(chats.status, "success");
-        assert_eq!(chats.payload.len(), 13);
-    }
 }
 
 #[derive(Deserialize, Debug)]
@@ -566,7 +558,10 @@ async fn post_userchat(
     Ok(())
 }
 
-async fn show_messages(messages: &[Message], login: &LoginPayload) -> Result<(), reqwest::Error> {
+async fn show_messages(
+    messages: &[Message<SendableContent>],
+    login: &LoginPayload,
+) -> Result<(), reqwest::Error> {
     print!("{}[2J{}[1;1H", 27 as char, 27 as char);
     for m in messages {
         //TODO: n+1 problem, shoudl fix on backend
@@ -587,7 +582,10 @@ async fn show_messages(messages: &[Message], login: &LoginPayload) -> Result<(),
     Ok(())
 }
 
-async fn get_and_show_msg(login_stuff: &LoginPayload, chat_id: &Uuid) -> Vec<Message> {
+async fn get_and_show_msg(
+    login_stuff: &LoginPayload,
+    chat_id: &Uuid,
+) -> Vec<Message<SendableContent>> {
     let messages = get_messages(&login_stuff, &chat_id).await.unwrap();
     show_messages(&messages, &login_stuff).await.unwrap();
     messages
@@ -665,4 +663,21 @@ pub fn write_file(path: &std::path::Path, text: &str) -> Result<(), std::io::Err
     file.write_all(text.as_bytes())?;
     file.flush()?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_deserialize_chats() {
+        let raw_json = r#"{"payload":[{"content":{"title":"chat1"},"message_id":"f79f1427-436d-47e2-8c47-aed6ff2bf09d","sender_name":"a","sent_at":"2026-06-23T17:24:23.562447Z"},{"content":{"text":"hi\n"},"message_id":"64f792b3-dc94-424f-be7e-b5cc67ee8541","sender_name":"a","sent_at":"2026-06-23T17:24:31.023501Z"},{"content":{"title":"chat2"},"message_id":"c8ed85b9-2c60-4c87-ba62-21a0212c5433","sender_name":"a","sent_at":"2026-06-23T17:41:58.152064Z"},{"content":{"text":"chat1"},"message_id":"65e3936f-261f-4839-ab06-85244e618eef","sender_name":"a","sent_at":"2026-06-23T19:24:10.642075Z"},{"content":{"text":"chat2"},"message_id":"85d12ced-eac4-4c7b-b924-3e0afafac189","sender_name":"a","sent_at":"2026-06-27T17:22:17.348149Z"},{"content":{"text":"chat3"},"message_id":"80795351-3872-4d3b-98ec-bb3d0a8a350b","sender_name":"a","sent_at":"2026-07-07T19:21:32.874907Z"},{"content":{"text":"oneOff"},"message_id":"3fa5477f-0b03-4138-ace6-3b2093160447","sender_name":"a","sent_at":"2026-07-07T22:52:29.002109Z"},{"content":{"text":"oneOff"},"message_id":"34816fb5-ba05-428b-a83d-e8de04775099","sender_name":"a","sent_at":"2026-07-08T18:22:17.177489Z"},{"content":{"text":"a_b"},"message_id":"130b18ea-4d97-4b45-9e01-b16390b9f158","sender_name":"b","sent_at":"2026-07-09T23:05:56.530122Z"},{"content":{"text":"a_b_test"},"message_id":"f0a65207-39a6-498f-a432-52a3b44f8622","sender_name":"a","sent_at":"2026-07-09T23:06:51.625501Z"},{"content":{"title":"a & b"},"message_id":"30a7bccb-cb81-4dbb-8f0f-4558b1b51763","sender_name":"a","sent_at":"2026-07-16T13:03:45.536795Z"},{"content":{"text":"canata"},"message_id":"bd97da05-07f8-45f3-bc01-226fdb16b615","sender_name":"a","sent_at":"2026-07-18T20:07:13.754509Z"},{"content":{"text":"iter"},"message_id":"8f563e28-5ef2-4025-8caa-ecf362ce077b","sender_name":"a","sent_at":"2026-07-19T16:44:00.876965Z"}],"status":"success"}"#;
+        let chats: ChatResponce = serde_json::from_str(raw_json).unwrap();
+        assert_eq!(chats.status, "success");
+        assert_eq!(chats.payload.len(), 13);
+    }
+    #[test]
+    fn it_works() {
+        let result = str_to_comand("other 3294");
+        assert_eq!(result, SlashCommands::NotValid);
+    }
 }

@@ -1,6 +1,6 @@
-//! # bens chat shared
+//! bens chat shared
 //! Use it but build yoru own frontend for bens chat or make a bot that uses it
-//! ejoy!
+//! enjoy!
 use reqwest::{self};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;

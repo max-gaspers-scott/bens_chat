@@ -1,3 +1,6 @@
+//! bens chat shared
+//! Use it but build yoru own frontend for bens chat or make a bot that uses it
+//! enjoy!
 use reqwest::{self};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -33,18 +36,6 @@ pub struct Message<C = serde_json::Value> {
     #[serde(default)]
     pub sent_at: chrono::DateTime<chrono::Utc>,
 }
-// use chrono::prelude::Utc;
-// impl Message {
-//     pub fn default(self) -> Message {
-//         Message {
-//             message_id: uuid::Uuid::new_v4(),
-//             sender_name: "default".to_string(),
-//             parent_id: Some(uuid::Uuid::new_v4()),
-//             content: serde_json::json!({"text": "default".to_string()}),
-//             sent_at: Utc::now(),
-//         }
-//     }
-// }
 
 #[cfg(test)]
 mod tests {
@@ -95,24 +86,6 @@ impl SendMessage {
         }
     }
 }
-
-// async fn send_message(
-//     login: &LoginPayload,
-//     message: &SendMesage,
-// ) -> Result<PostMsgRes, reqwest::Error> {
-//     let url = format!("{BASE_URL}/messages");
-//     let client = reqwest::Client::new();
-//
-//     let response = client
-//         .post(url)
-//         .json(message)
-//         .bearer_auth(login.token.clone())
-//         .send()
-//         .await?;
-//
-//     let parsed_res = response.json::<PostMsgRes>().await?;
-//     Ok(parsed_res)
-// }
 
 // ---------------------------------------------------------------------------
 // Note

@@ -1,6 +1,6 @@
 [package]
 name = "bens-chat-shared"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 description = "This crate lest anyone make programs that send and receive messages for bens chat"
 license = "Apache-2.0"

@@ -35,7 +35,7 @@ services:
 
 
   app:
-    image: maxthemerman/bens_chat2-app:0.1.10
+    image: maxthemerman/bens_chat2-app:0.1.12
     container_name: bens_chat2_app
     ports:
       - "9821:8081"

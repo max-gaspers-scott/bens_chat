@@ -1,5 +1,7 @@
 use crate::get_current_login;
-use bens_chat_shared::{Chip, Connect4, ImgMessage, SendableContent, TextMessage, TitleMessage};
+use bens_chat_shared::{
+    Chip, Connect4, ImgMessage, SendableContent, TextMessage, TitleMessage, UnsuportedMsg,
+};
 use image::DynamicImage;
 use reqwest::Client;
 use termimad::print_text;
@@ -19,6 +21,7 @@ impl Showable for SendableContent {
             Self::Img(i) => i.show().await,
             Self::Title(t) => t.show().await,
             Self::Con4(b) => b.show().await,
+            Self::Unsuportad(u) => u.show().await,
         }
     }
 }
@@ -37,6 +40,14 @@ impl Showable for TitleMessage {
         let fixed_input = raw.replace("\\n", "\n").replace("\\", "");
         print!("title: ");
         print_text(&fixed_input);
+    }
+}
+
+impl Showable for UnsuportedMsg {
+    async fn show(&self) {
+        let raw = "unsuported".to_string();
+        print!("title: ");
+        print_text(&raw);
     }
 }
 

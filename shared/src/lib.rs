@@ -45,6 +45,7 @@ mod tests {
     fn create_message_sender() {
         let parent_uuid = uuid::Uuid::new_v4();
         let user = "testUser".to_string();
+
         let content = serde_json::json!({
             "test": message,
         });
@@ -75,7 +76,7 @@ impl SendMessage {
         Ok(parsed_res)
     }
     // love curry
-    pub fn create_message_sender(
+    pub fn make_send_message_creater(
         parent_id: uuid::Uuid,
         user_name: &str,
     ) -> impl Fn(serde_json::Value) -> SendMessage {
@@ -112,6 +113,7 @@ pub enum SendableContent {
     Text(TextMessage),
     Title(TitleMessage),
     Con4(Connect4),
+    Unsuportad(UnsuportedMsg),
 }
 
 impl SendableContent {
@@ -121,6 +123,7 @@ impl SendableContent {
             Self::Img(i) => i.url.clone(),
             Self::Title(t) => t.title.clone(),
             Self::Con4(b) => b.name.clone(),
+            Self::Unsuportad(u) => "unsuported message".to_string(),
         }
     }
 }
@@ -139,6 +142,12 @@ pub struct TitleMessage {
 pub struct ImgMessage {
     pub url: String,
 }
+
+// ---------------------------------------------------------------------------
+// U
+// ---------------------------------------------------------------------------
+#[derive(Debug, Serialize, Deserialize)]
+pub struct UnsuportedMsg {}
 
 // ---------------------------------------------------------------------------
 // Connect4

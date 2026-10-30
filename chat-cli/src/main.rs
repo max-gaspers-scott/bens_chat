@@ -303,7 +303,7 @@ impl Window {
             }
         }
         .unwrap();
-        let create_message = SendMessage::create_message_sender(chat_id, &login_stuff.username);
+        let create_message = SendMessage::make_send_message_creater(chat_id, &login_stuff.username);
         loop {
             let mut messages = get_and_show_msg(&login_stuff, &chat_id).await;
             println!("------------------");

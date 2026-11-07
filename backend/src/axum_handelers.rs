@@ -564,3 +564,4 @@ pub async fn get_root_chat_id(pool: &PgPool, message_id: Uuid) -> Result<Uuid, s
 }
 
 // pub async fn get_all_messages_for_parent
+//

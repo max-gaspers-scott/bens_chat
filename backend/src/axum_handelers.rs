@@ -178,43 +178,16 @@ pub async fn is_user_in_chat(
     name: &str,
     chat_id: &Uuid,
 ) -> Result<bool, sqlx::Error> {
+    // The root of any message is ancestors[1] (or itself if it is a root).
     sqlx::query_scalar::<_, bool>(
         r#"
-        WITH RECURSIVE chat_tree AS (
-            SELECT
-                m.message_id,
-                m.parent_id,
-                m.message_id as original_message_id
-            FROM messages m
-            WHERE m.message_id = $2 -- Start with the given message_id
-
-            UNION ALL
-
-            SELECT
-                m_rec.message_id,
-                m_rec.parent_id,
-                ct.original_message_id
-            FROM messages m_rec
-            JOIN chat_tree ct ON m_rec.message_id = ct.parent_id
-        )
         SELECT EXISTS (
             SELECT 1
-            FROM chat_participants cp
-            JOIN (
-                WITH RECURSIVE chat_ancestry AS (
-                    SELECT message_id, parent_id
-                    FROM messages
-                    WHERE message_id = $2
-                    UNION ALL
-                    SELECT m.message_id, m.parent_id
-                    FROM messages m
-                    JOIN chat_ancestry ca ON m.message_id = ca.parent_id
-                )
-                SELECT message_id
-                FROM chat_ancestry
-                WHERE parent_id IS NULL
-            ) AS root_message ON cp.chat_id = root_message.message_id
-            WHERE cp.user_name = $1
+            FROM messages m
+            JOIN chat_participants cp
+              ON cp.chat_id = COALESCE(m.ancestors[1], m.message_id)
+            WHERE m.message_id = $2
+              AND cp.user_name = $1
         )
         "#,
     )
@@ -257,7 +230,11 @@ pub async fn get_message_id_sender_name_content_parent(
         Err(e) => return Json(json!({"status": "error", "error": e.to_string()})),
     }
 
-    let query = "SELECT * FROM messages WHERE parent_id = $1 ORDER BY sent_at";
+    // The requested message plus its entire subtree (all descendants), flat.
+    // `ancestors @> ARRAY[$1]` lets Postgres use the GIN index on ancestors.
+    let query = "SELECT * FROM messages \
+                 WHERE message_id = $1 OR ancestors @> ARRAY[$1]::uuid[] \
+                 ORDER BY sent_at";
     let q = sqlx::query_as::<_, Message>(query).bind(match_val.parent);
 
     match q.fetch_all(&pool).await {
@@ -268,6 +245,7 @@ pub async fn get_message_id_sender_name_content_parent(
                     json!({
                         "message_id": m.message_id,
                         "sender_name": m.sender_name,
+                        "parent_id": m.parent_id,
                         "content": m.content,
                         "sent_at": m.sent_at,
                     })
@@ -543,19 +521,9 @@ pub async fn get_fetch_url(
 pub async fn get_root_chat_id(pool: &PgPool, message_id: Uuid) -> Result<Uuid, sqlx::Error> {
     sqlx::query_scalar::<_, Uuid>(
         r#"
-        WITH RECURSIVE chat_ancestry AS (
-            SELECT message_id, parent_id
-            FROM messages
-            WHERE message_id = $1
-            UNION ALL
-            SELECT m.message_id, m.parent_id
-            FROM messages m
-            JOIN chat_ancestry ca ON m.message_id = ca.parent_id
-        )
-        SELECT message_id
-        FROM chat_ancestry
-        WHERE parent_id IS NULL
-        LIMIT 1
+        SELECT COALESCE(ancestors[1], message_id)
+        FROM messages
+        WHERE message_id = $1
         "#,
     )
     .bind(message_id)

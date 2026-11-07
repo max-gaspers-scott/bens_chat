@@ -159,7 +159,8 @@ export const api = {
     return response.json();
   },
 
-  // Get messages for a chat (children of the chat's root message)
+  // Get a message and its whole subtree (flat, ordered by sent_at). parent may be
+  // any message id; it becomes the top of the view.
   async getMessages(parent) {
     const response = await apiFetch(
       `${API_BASE_URL}/messages?parent=${encodeURIComponent(parent)}`,

@@ -63,7 +63,10 @@ function Connect4Form({ senderName, onSubmit, onCancel, loading, serverError }) 
 // ---------------------------------------------------------------------------
 // Main SendMessage component
 // ---------------------------------------------------------------------------
-function SendMessage({ chatId, senderName, onMessageSent }) {
+// chatId   – the chat's root message id (used to authorize image uploads)
+// parentId – the message new messages are posted under (defaults to chatId)
+function SendMessage({ chatId, parentId, senderName, onMessageSent }) {
+  const targetParentId = parentId || chatId;
   const [content, setContent] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -135,7 +138,7 @@ function SendMessage({ chatId, senderName, onMessageSent }) {
 
       const result = await api.sendMessage({
         sender_name: senderName,
-        parent: chatId,
+        parent: targetParentId,
         content: messageContent,
       });
 
@@ -160,7 +163,7 @@ function SendMessage({ chatId, senderName, onMessageSent }) {
     try {
       const result = await api.createConnect4({
         senderName,
-        chatId,
+        chatId: targetParentId,
         boardName,
         opponent,
       });

@@ -104,7 +104,7 @@ enum SlashCommands {
     NotValid,
 }
 fn str_to_comand(input: &str) -> SlashCommands {
-    let s = if input == "/update" {
+    if input == "/update" {
         SlashCommands::Update
     } else if input == "/new-connet3" {
         SlashCommands::NewConn4
@@ -116,8 +116,7 @@ fn str_to_comand(input: &str) -> SlashCommands {
         SlashCommands::Exit
     } else {
         SlashCommands::NotValid
-    };
-    s
+    }
 }
 
 impl Window {

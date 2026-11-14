@@ -3,6 +3,7 @@ use crate::{
     SlashCommands::NotValid,
     structs::{Connect4, SendableContent::Con4, Showable, *},
 };
+use anyhow;
 use bens_chat_shared::{Message, Position};
 use clap::builder::Str;
 use cool_cli_input::get_input;
@@ -14,21 +15,25 @@ use inquire::{
 };
 use reqwest::Response;
 use reqwest::{self, Client, Request};
+use rust_socketio::{
+    Payload,
+    asynchronous::{Client as AsyncClient, ClientBuilder},
+};
 use serde::Deserialize;
+// use serde_json::json;
 use serde_json::json;
 use std::future::Future;
 use std::io::Write;
 use std::thread::AccessError;
 use std::time::Duration;
+// use std::time::Duration;
 use std::{clone, io::Read};
 use std::{collections::HashMap, vec};
 use std::{fmt::format, fs::OpenOptions};
 use std::{fs::File, str::SplitAsciiWhitespace};
 use termimad::{print_inline, print_text};
 use uuid::Uuid;
-use viuer::print;
-
-// should be in env, but this will work for now
+use viuer::print; // should be in env, but this will work for now
 // const PORT: u32 = 8081;
 const BASE_URL: &str = "http://localhost:9821"; //9821
 // const BASE_URL: &str = "https://bens-chat.team-stingray.com";
@@ -607,7 +612,6 @@ async fn get_and_show_msg(
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut app = Window::new();
-
     app.run().await;
     Ok(())
 }

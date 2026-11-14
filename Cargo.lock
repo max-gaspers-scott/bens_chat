@@ -411,6 +411,7 @@ dependencies = [
 name = "bens-chat-cli"
 version = "0.1.6"
 dependencies = [
+ "anyhow",
  "bens-chat-shared",
  "chrono",
  "clap",

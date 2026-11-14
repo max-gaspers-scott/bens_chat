@@ -81,6 +81,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await?;
     sqlx::migrate!("./migrations").run(&pool).await?;
 
+    // Make sure the image bucket exists in RustFS (in the background so a slow
+    // object store doesn't block the API from starting).
+    tokio::spawn(axum_handelers::ensure_bucket());
+
     let pool_for_ns = pool.clone();
     io.ns("/", move |s: SocketRef| {
         let pool = pool_for_ns.clone();

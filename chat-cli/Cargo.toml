@@ -33,3 +33,4 @@ futures-util = "0.3.32"
 rand = "0.10.2"
 cool_cli_input = "0.2.1"
 inquire = { version = "0.9.4", features = ["editor"] }
+anyhow = "1.0.104"

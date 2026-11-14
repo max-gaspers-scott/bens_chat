@@ -36,11 +36,10 @@ pub struct Message<C = serde_json::Value> {
     pub sent_at: chrono::DateTime<chrono::Utc>,
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
-// for testing
+    // for testing
     #[derive(Deserialize)]
     struct LoginResponse {
         payload: LoginPayload,
@@ -107,9 +106,11 @@ mod tests {
         let message1 = create_message(content);
 
         let jwt = get_jwt().await;
-        message1.send(jwt, "http://localhost:9821/messages").await.unwrap()
+        message1
+            .send(jwt, "http://localhost:9821/messages")
+            .await
+            .unwrap()
     }
-
 }
 
 /// The body sent from the CLI when posting a new message.
@@ -152,7 +153,7 @@ impl SendMessage {
     // love curry
     pub fn make_send_message_creater(
         parent_id: uuid::Uuid,
-        user_name: &str,
+        user_name: String,
     ) -> impl Fn(serde_json::Value) -> SendMessage {
         move |content: serde_json::Value| SendMessage {
             sender_name: user_name.to_string(),

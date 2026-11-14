@@ -443,12 +443,18 @@ pub async fn get_user_id_username(
     }
 }
 
+pub const BUCKET: &str = "bucket";
+
 pub fn build_minio_client(endpoint: &str) -> Minio {
-    let access_key = env::var("MINIO_ACCESS_KEY").expect("MINIO_ACCESS_KEY not set");
-    let secret_key = env::var("MINIO_SECRET_KEY").expect("MINIO_SECRET_KEY not set");
     let secure = env::var("MINIO_SECURE")
         .map(|v| v == "true")
         .unwrap_or(false);
+    build_minio_client_with(endpoint, secure)
+}
+
+fn build_minio_client_with(endpoint: &str, secure: bool) -> Minio {
+    let access_key = env::var("MINIO_ACCESS_KEY").expect("MINIO_ACCESS_KEY not set");
+    let secret_key = env::var("MINIO_SECRET_KEY").expect("MINIO_SECRET_KEY not set");
     let provider = StaticProvider::new(&access_key, &secret_key, None);
     Minio::builder()
         .endpoint(endpoint)
@@ -456,6 +462,37 @@ pub fn build_minio_client(endpoint: &str) -> Minio {
         .secure(secure)
         .build()
         .unwrap()
+}
+
+/// Create the storage bucket if it doesn't exist yet. Retries for a while because
+/// the object store (RustFS) may still be starting when the backend boots.
+/// Uses the internal MINIO_ENDPOINT (plain http on the docker network) when set,
+/// otherwise the public endpoint.
+pub async fn ensure_bucket() {
+    let minio = match env::var("MINIO_ENDPOINT") {
+        Ok(internal) => build_minio_client_with(&internal, false),
+        Err(_) => build_minio_client(
+            &env::var("MINIO_PUBLIC_ENDPOINT").expect("MINIO_PUBLIC_ENDPOINT not set"),
+        ),
+    };
+    for attempt in 1..=30 {
+        match minio.bucket_exists(BUCKET).await {
+            Ok(true) => {
+                println!("storage bucket '{BUCKET}' ready");
+                return;
+            }
+            Ok(false) => match minio.make_bucket(BUCKET, false).await {
+                Ok(_) => {
+                    println!("created storage bucket '{BUCKET}'");
+                    return;
+                }
+                Err(e) => println!("failed to create bucket '{BUCKET}' (attempt {attempt}): {e}"),
+            },
+            Err(e) => println!("object store not reachable (attempt {attempt}): {e}"),
+        }
+        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+    }
+    println!("WARNING: giving up on creating bucket '{BUCKET}'; image uploads will fail");
 }
 
 pub async fn get_put_url(
@@ -478,7 +515,7 @@ pub async fn get_put_url(
     let public_endpoint = env::var("MINIO_PUBLIC_ENDPOINT").expect("MINIO_PUBLIC_ENDPOINT not set");
     let minio = build_minio_client(&public_endpoint);
     match minio
-        .presigned_put_object(PresignedArgs::new("bucket", &object_key).expires(15 * 60))
+        .presigned_put_object(PresignedArgs::new(BUCKET, &object_key).expires(15 * 60))
         .await
     {
         Ok(url) => Json(json!({"status": "success", "upload_url": url, "object_key": object_key})),
@@ -510,7 +547,7 @@ pub async fn get_fetch_url(
     let public_endpoint = env::var("MINIO_PUBLIC_ENDPOINT").expect("MINIO_PUBLIC_ENDPOINT not set");
     let minio = build_minio_client(&public_endpoint);
     match minio
-        .presigned_get_object(PresignedArgs::new("bucket", &params.object_key).expires(3600))
+        .presigned_get_object(PresignedArgs::new(BUCKET, &params.object_key).expires(3600))
         .await
     {
         Ok(url) => Json(json!({"status": "success", "url": url})),

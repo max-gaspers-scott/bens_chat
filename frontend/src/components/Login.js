@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { api } from '../api/api';
 
-function Login({ onLoginSuccess }) {
+function Login({ onLoginSuccess, onSwitchToSignUp }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -57,6 +57,14 @@ function Login({ onLoginSuccess }) {
           {loading ? 'Logging in...' : 'Login'}
         </button>
       </form>
+      {onSwitchToSignUp && (
+        <p className="switch-view">
+          Don't have an account?{' '}
+          <button type="button" onClick={onSwitchToSignUp} className="link-btn">
+            Sign Up
+          </button>
+        </p>
+      )}
     </div>
   );
 }

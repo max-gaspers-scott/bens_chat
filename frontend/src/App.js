@@ -301,15 +301,10 @@ function App() {
         )}
 
         {!currentUser && view === 'login' && (
-          <>
-            <Login onLoginSuccess={handleLoginSuccess} />
-            <p className="switch-view">
-              Don't have an account?{' '}
-              <button onClick={() => setView('signup')} className="link-btn">
-                Sign Up
-              </button>
-            </p>
-          </>
+          <Login
+            onLoginSuccess={handleLoginSuccess}
+            onSwitchToSignUp={() => setView('signup')}
+          />
         )}
 
         {currentUser && view === 'reset-password' && (

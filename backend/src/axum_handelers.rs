@@ -178,43 +178,16 @@ pub async fn is_user_in_chat(
     name: &str,
     chat_id: &Uuid,
 ) -> Result<bool, sqlx::Error> {
+    // The root of any message is ancestors[1] (or itself if it is a root).
     sqlx::query_scalar::<_, bool>(
         r#"
-        WITH RECURSIVE chat_tree AS (
-            SELECT
-                m.message_id,
-                m.parent_id,
-                m.message_id as original_message_id
-            FROM messages m
-            WHERE m.message_id = $2 -- Start with the given message_id
-
-            UNION ALL
-
-            SELECT
-                m_rec.message_id,
-                m_rec.parent_id,
-                ct.original_message_id
-            FROM messages m_rec
-            JOIN chat_tree ct ON m_rec.message_id = ct.parent_id
-        )
         SELECT EXISTS (
             SELECT 1
-            FROM chat_participants cp
-            JOIN (
-                WITH RECURSIVE chat_ancestry AS (
-                    SELECT message_id, parent_id
-                    FROM messages
-                    WHERE message_id = $2
-                    UNION ALL
-                    SELECT m.message_id, m.parent_id
-                    FROM messages m
-                    JOIN chat_ancestry ca ON m.message_id = ca.parent_id
-                )
-                SELECT message_id
-                FROM chat_ancestry
-                WHERE parent_id IS NULL
-            ) AS root_message ON cp.chat_id = root_message.message_id
-            WHERE cp.user_name = $1
+            FROM messages m
+            JOIN chat_participants cp
+              ON cp.chat_id = COALESCE(m.ancestors[1], m.message_id)
+            WHERE m.message_id = $2
+              AND cp.user_name = $1
         )
         "#,
     )
@@ -257,7 +230,11 @@ pub async fn get_message_id_sender_name_content_parent(
         Err(e) => return Json(json!({"status": "error", "error": e.to_string()})),
     }
 
-    let query = "SELECT * FROM messages WHERE parent_id = $1 ORDER BY sent_at";
+    // The requested message plus its entire subtree (all descendants), flat.
+    // `ancestors @> ARRAY[$1]` lets Postgres use the GIN index on ancestors.
+    let query = "SELECT * FROM messages \
+                 WHERE message_id = $1 OR ancestors @> ARRAY[$1]::uuid[] \
+                 ORDER BY sent_at";
     let q = sqlx::query_as::<_, Message>(query).bind(match_val.parent);
 
     match q.fetch_all(&pool).await {
@@ -268,6 +245,7 @@ pub async fn get_message_id_sender_name_content_parent(
                     json!({
                         "message_id": m.message_id,
                         "sender_name": m.sender_name,
+                        "parent_id": m.parent_id,
                         "content": m.content,
                         "sent_at": m.sent_at,
                     })
@@ -465,12 +443,18 @@ pub async fn get_user_id_username(
     }
 }
 
+pub const BUCKET: &str = "bucket";
+
 pub fn build_minio_client(endpoint: &str) -> Minio {
-    let access_key = env::var("MINIO_ACCESS_KEY").expect("MINIO_ACCESS_KEY not set");
-    let secret_key = env::var("MINIO_SECRET_KEY").expect("MINIO_SECRET_KEY not set");
     let secure = env::var("MINIO_SECURE")
         .map(|v| v == "true")
         .unwrap_or(false);
+    build_minio_client_with(endpoint, secure)
+}
+
+fn build_minio_client_with(endpoint: &str, secure: bool) -> Minio {
+    let access_key = env::var("MINIO_ACCESS_KEY").expect("MINIO_ACCESS_KEY not set");
+    let secret_key = env::var("MINIO_SECRET_KEY").expect("MINIO_SECRET_KEY not set");
     let provider = StaticProvider::new(&access_key, &secret_key, None);
     Minio::builder()
         .endpoint(endpoint)
@@ -478,6 +462,37 @@ pub fn build_minio_client(endpoint: &str) -> Minio {
         .secure(secure)
         .build()
         .unwrap()
+}
+
+/// Create the storage bucket if it doesn't exist yet. Retries for a while because
+/// the object store (RustFS) may still be starting when the backend boots.
+/// Uses the internal MINIO_ENDPOINT (plain http on the docker network) when set,
+/// otherwise the public endpoint.
+pub async fn ensure_bucket() {
+    let minio = match env::var("MINIO_ENDPOINT") {
+        Ok(internal) => build_minio_client_with(&internal, false),
+        Err(_) => build_minio_client(
+            &env::var("MINIO_PUBLIC_ENDPOINT").expect("MINIO_PUBLIC_ENDPOINT not set"),
+        ),
+    };
+    for attempt in 1..=30 {
+        match minio.bucket_exists(BUCKET).await {
+            Ok(true) => {
+                println!("storage bucket '{BUCKET}' ready");
+                return;
+            }
+            Ok(false) => match minio.make_bucket(BUCKET, false).await {
+                Ok(_) => {
+                    println!("created storage bucket '{BUCKET}'");
+                    return;
+                }
+                Err(e) => println!("failed to create bucket '{BUCKET}' (attempt {attempt}): {e}"),
+            },
+            Err(e) => println!("object store not reachable (attempt {attempt}): {e}"),
+        }
+        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+    }
+    println!("WARNING: giving up on creating bucket '{BUCKET}'; image uploads will fail");
 }
 
 pub async fn get_put_url(
@@ -500,7 +515,7 @@ pub async fn get_put_url(
     let public_endpoint = env::var("MINIO_PUBLIC_ENDPOINT").expect("MINIO_PUBLIC_ENDPOINT not set");
     let minio = build_minio_client(&public_endpoint);
     match minio
-        .presigned_put_object(PresignedArgs::new("bucket", &object_key).expires(15 * 60))
+        .presigned_put_object(PresignedArgs::new(BUCKET, &object_key).expires(15 * 60))
         .await
     {
         Ok(url) => Json(json!({"status": "success", "upload_url": url, "object_key": object_key})),
@@ -532,7 +547,7 @@ pub async fn get_fetch_url(
     let public_endpoint = env::var("MINIO_PUBLIC_ENDPOINT").expect("MINIO_PUBLIC_ENDPOINT not set");
     let minio = build_minio_client(&public_endpoint);
     match minio
-        .presigned_get_object(PresignedArgs::new("bucket", &params.object_key).expires(3600))
+        .presigned_get_object(PresignedArgs::new(BUCKET, &params.object_key).expires(3600))
         .await
     {
         Ok(url) => Json(json!({"status": "success", "url": url})),
@@ -543,19 +558,9 @@ pub async fn get_fetch_url(
 pub async fn get_root_chat_id(pool: &PgPool, message_id: Uuid) -> Result<Uuid, sqlx::Error> {
     sqlx::query_scalar::<_, Uuid>(
         r#"
-        WITH RECURSIVE chat_ancestry AS (
-            SELECT message_id, parent_id
-            FROM messages
-            WHERE message_id = $1
-            UNION ALL
-            SELECT m.message_id, m.parent_id
-            FROM messages m
-            JOIN chat_ancestry ca ON m.message_id = ca.parent_id
-        )
-        SELECT message_id
-        FROM chat_ancestry
-        WHERE parent_id IS NULL
-        LIMIT 1
+        SELECT COALESCE(ancestors[1], message_id)
+        FROM messages
+        WHERE message_id = $1
         "#,
     )
     .bind(message_id)
@@ -564,3 +569,4 @@ pub async fn get_root_chat_id(pool: &PgPool, message_id: Uuid) -> Result<Uuid, s
 }
 
 // pub async fn get_all_messages_for_parent
+//

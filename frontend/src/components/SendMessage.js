@@ -63,7 +63,10 @@ function Connect4Form({ senderName, onSubmit, onCancel, loading, serverError }) 
 // ---------------------------------------------------------------------------
 // Main SendMessage component
 // ---------------------------------------------------------------------------
-function SendMessage({ chatId, senderName, onMessageSent }) {
+// chatId   – the chat's root message id (used to authorize image uploads)
+// parentId – the message new messages are posted under (defaults to chatId)
+function SendMessage({ chatId, parentId, senderName, onMessageSent }) {
+  const targetParentId = parentId || chatId;
   const [content, setContent] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -72,6 +75,15 @@ function SendMessage({ chatId, senderName, onMessageSent }) {
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const fileInputRef = useRef(null);
+  const textareaRef = useRef(null);
+
+  // Grow the textarea with its content (up to the CSS max-height)
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [content]);
 
   // Attach modal state: null | 'menu' | 'connect4'
   const [attachView, setAttachView] = useState(null);
@@ -114,7 +126,7 @@ function SendMessage({ chatId, senderName, onMessageSent }) {
 
   // ---- Send regular message / image ----
   const handleSubmit = async (e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
     if (!content.trim() && !imageFile) return;
 
     setError('');
@@ -135,7 +147,7 @@ function SendMessage({ chatId, senderName, onMessageSent }) {
 
       const result = await api.sendMessage({
         sender_name: senderName,
-        parent: chatId,
+        parent: targetParentId,
         content: messageContent,
       });
 
@@ -160,7 +172,7 @@ function SendMessage({ chatId, senderName, onMessageSent }) {
     try {
       const result = await api.createConnect4({
         senderName,
-        chatId,
+        chatId: targetParentId,
         boardName,
         opponent,
       });
@@ -264,11 +276,20 @@ function SendMessage({ chatId, senderName, onMessageSent }) {
         </div>
 
         <form onSubmit={handleSubmit}>
-          <input
-            type="text"
+          <textarea
+            ref={textareaRef}
+            rows={1}
             className="send-message-input"
             value={content}
             onChange={(e) => setContent(e.target.value)}
+            onKeyDown={(e) => {
+              // Enter sends; Shift+Enter inserts a new line.
+              // Skip while an IME is composing (e.g. CJK input).
+              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                e.preventDefault();
+                if (canSend) handleSubmit();
+              }
+            }}
             placeholder="Type a message..."
             disabled={loading}
           />

@@ -3,6 +3,7 @@ use crate::{
     SlashCommands::NotValid,
     structs::{Connect4, SendableContent::Con4, Showable, *},
 };
+use anyhow;
 use bens_chat_shared::{Message, Position};
 use clap::builder::Str;
 use cool_cli_input::get_input;
@@ -14,24 +15,28 @@ use inquire::{
 };
 use reqwest::Response;
 use reqwest::{self, Client, Request};
+use rust_socketio::{
+    Payload,
+    asynchronous::{Client as AsyncClient, ClientBuilder},
+};
 use serde::Deserialize;
+// use serde_json::json;
 use serde_json::json;
 use std::future::Future;
 use std::io::Write;
 use std::thread::AccessError;
 use std::time::Duration;
+// use std::time::Duration;
 use std::{clone, io::Read};
 use std::{collections::HashMap, vec};
 use std::{fmt::format, fs::OpenOptions};
 use std::{fs::File, str::SplitAsciiWhitespace};
 use termimad::{print_inline, print_text};
 use uuid::Uuid;
-use viuer::print;
-
-// should be in env, but this will work for now
+use viuer::print; // should be in env, but this will work for now
 // const PORT: u32 = 8081;
-// const BASE_URL: &str = "http://localhost:8081"; //9821
-const BASE_URL: &str = "https://bens-chat.team-stingray.com";
+const BASE_URL: &str = "http://localhost:9821"; //9821
+// const BASE_URL: &str = "https://bens-chat.team-stingray.com";
 
 use std::sync::RwLock;
 
@@ -104,7 +109,7 @@ enum SlashCommands {
     NotValid,
 }
 fn str_to_comand(input: &str) -> SlashCommands {
-    let s = if input == "/update" {
+    if input == "/update" {
         SlashCommands::Update
     } else if input == "/new-connet3" {
         SlashCommands::NewConn4
@@ -116,8 +121,7 @@ fn str_to_comand(input: &str) -> SlashCommands {
         SlashCommands::Exit
     } else {
         SlashCommands::NotValid
-    };
-    s
+    }
 }
 
 impl Window {
@@ -326,9 +330,9 @@ impl Window {
                 //     Ok(_) => {}
                 //     Err(e) => print!("error sendimg message: {e}"),
                 // }
-                let url = format!("{BASE_URL}/messages");
-                let token = login_stuff.token.clone();
-                msg.send(&token, &url);
+                if let Err(e) = send_message(login_stuff, &msg).await {
+                    println!("error sendimg message: {e}");
+                }
             }
 
             match input {
@@ -348,7 +352,8 @@ impl Window {
 
                     std::io::stdin().read_line(&mut buff).unwrap();
                     let input = buff.trim();
-                    for m in &messages {
+                    // skip the view root itself, it's already open
+                    for m in messages.iter().filter(|m| m.message_id != chat_id) {
                         let cont = m.content.get_content();
                         let id = m.message_id;
                         if cont == input {
@@ -558,25 +563,38 @@ async fn post_userchat(
     Ok(())
 }
 
+/// max indentation levels; deeper replies are drawn at this level with their depth shown
+const MAX_INDENT: usize = 8;
+
 async fn show_messages(
     messages: &[Message<SendableContent>],
-    login: &LoginPayload,
+    root_id: &Uuid,
 ) -> Result<(), reqwest::Error> {
     print!("{}[2J{}[1;1H", 27 as char, 27 as char);
-    for m in messages {
-        //TODO: n+1 problem, shoudl fix on backend
-        let messages = get_messages(login, &m.message_id).await.unwrap();
-        // let id =
+    let me = get_current_login().unwrap().username;
+    let tree = build_tree(messages, *root_id);
 
-        if m.sender_name == get_current_login().unwrap().username {
+    // the message the view is opened on is a header, not part of the conversation
+    if let Some(root) = tree.root {
+        if root.parent_id.is_some() {
+            print!("replying to {}: ", root.sender_name);
+        }
+        root.content.show().await;
+        println!("==================");
+    }
+
+    for (depth, m) in tree.rows {
+        let indent = "    ".repeat(depth.min(MAX_INDENT) - 1);
+        print!("{indent}");
+        if depth > MAX_INDENT {
+            print!("[{depth}] ");
+        }
+        if m.sender_name == me {
             print!("you: ");
         } else {
             print!("{}: ", m.sender_name);
         }
         m.content.show().await;
-        if !messages.is_empty() {
-            println!("\t-> has sub chat");
-        }
         println!();
     }
     Ok(())
@@ -587,14 +605,13 @@ async fn get_and_show_msg(
     chat_id: &Uuid,
 ) -> Vec<Message<SendableContent>> {
     let messages = get_messages(&login_stuff, &chat_id).await.unwrap();
-    show_messages(&messages, &login_stuff).await.unwrap();
+    show_messages(&messages, &chat_id).await.unwrap();
     messages
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut app = Window::new();
-
     app.run().await;
     Ok(())
 }

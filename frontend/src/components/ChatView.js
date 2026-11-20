@@ -1,5 +1,6 @@
-import { useEffect, useState, useCallback, memo, useRef } from 'react';
+import { useEffect, useState, useCallback, useMemo, memo, useRef } from 'react';
 import { api } from '../api/api';
+import { buildTree, countDescendants } from '../utils/buildTree';
 import SendMessage from './SendMessage';
 import Connect4Board from './Connect4Board';
 
@@ -104,32 +105,148 @@ function StartDirectChatForm({ currentUser, onSelectChat }) {
   );
 }
 
+// How many levels of replies are shown inline, relative to the current view root.
+// Replies deeper than this are reached through "continue this thread".
+export const MAX_DEPTH = 5;
+
+// Short plain-text description of a message, for headers and the reply indicator.
+export function messageSnippet(msg, maxLength = 50) {
+  const content = (msg && msg.content) || {};
+  let text = (content.title || content.text || '').trim();
+  if (!text) {
+    if (Array.isArray(content.grid)) text = `Connect 4: ${content.name || 'game'}`;
+    else if (content.url) text = 'Image';
+  }
+  return text.length > maxLength ? `${text.slice(0, maxLength)}…` : text;
+}
+
+// The body of a single message: Connect4 board, text/title and/or image.
+function MessageBody({ msg, currentUser, onMoveSent }) {
+  const content = msg.content || {};
+  if (Array.isArray(content.grid)) {
+    return <Connect4Board msg={msg} currentUser={currentUser} onMoveSent={onMoveSent} />;
+  }
+  const text = content.title || content.text;
+  return (
+    <>
+      {text && text.trim() && <div className="message-content">{text}</div>}
+      {content.url && <ChatImage objectKey={content.url} />}
+    </>
+  );
+}
+
+function MessageMeta({ msg, currentUser }) {
+  return (
+    <div className="message-meta">
+      <span className="message-sender">
+        {msg.sender_name === currentUser.username ? 'You' : msg.sender_name}
+      </span>
+      <span className="message-time">
+        {msg.sent_at ? new Date(msg.sent_at).toLocaleString() : ''}
+      </span>
+    </div>
+  );
+}
+
+// One message plus its replies, rendered recursively up to MAX_DEPTH.
+const ThreadNode = memo(function ThreadNode({
+  node,
+  depth,
+  currentUser,
+  replyToId,
+  onReply,
+  onOpenThread,
+  onMoveSent,
+}) {
+  const { msg, children } = node;
+  const isConnect4 = msg.content && Array.isArray(msg.content.grid);
+  const atMaxDepth = depth >= MAX_DEPTH;
+  const hiddenReplies = atMaxDepth ? countDescendants(node) : 0;
+
+  return (
+    <div className="thread-node" data-message-id={msg.message_id}>
+      <div
+        className={`message ${msg.sender_name === currentUser.username ? 'own' : 'other'}${
+          isConnect4 ? ' connect4-message' : ''
+        }${replyToId === msg.message_id ? ' reply-target' : ''}`}
+      >
+        <MessageBody msg={msg} currentUser={currentUser} onMoveSent={onMoveSent} />
+        <MessageMeta msg={msg} currentUser={currentUser} />
+        <div className="message-actions">
+          <button type="button" className="link-btn message-action-btn" onClick={() => onReply(msg)}>
+            Reply
+          </button>
+          {hiddenReplies > 0 ? (
+            <button
+              type="button"
+              className="link-btn message-action-btn continue-thread-btn"
+              onClick={() => onOpenThread(msg.message_id)}
+            >
+              continue this thread → ({hiddenReplies} more {hiddenReplies === 1 ? 'reply' : 'replies'})
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="link-btn message-action-btn"
+              onClick={() => onOpenThread(msg.message_id)}
+              title="Show this message and its replies on their own"
+            >
+              Open thread
+            </button>
+          )}
+        </div>
+      </div>
+      {!atMaxDepth && children.length > 0 && (
+        <div className="thread-children">
+          {children.map((child) => (
+            <ThreadNode
+              key={child.msg.message_id}
+              node={child}
+              depth={depth + 1}
+              currentUser={currentUser}
+              replyToId={replyToId}
+              onReply={onReply}
+              onOpenThread={onOpenThread}
+              onMoveSent={onMoveSent}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+});
+
 function ChatView({ chatId, currentUser, onSelectChat, onToggleSidebar, sidebarOpen }) {
+  // Flat list from the backend: the view root plus all of its descendants.
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
-  // Navigation stack of parents. The first entry is the chat's root message;
-  // each additional entry is a message the user opened as a sub-chat.
-  const [parentStack, setParentStack] = useState(() =>
-    chatId ? [{ id: chatId, label: 'Chat' }] : []
-  );
-  const messagesEndRef = useRef(null);
-  const prevMessagesRef = useRef([]);
+  const [loadError, setLoadError] = useState('');
+  // The message shown at the top of the view. Starts at the chat's true root
+  // (chatId, as opened from the chat list) and changes as the user navigates.
+  const [viewRootId, setViewRootId] = useState(chatId);
+  // Message the composer replies to; null means "reply to the view root".
+  const [replyTo, setReplyTo] = useState(null);
+  const containerRef = useRef(null);
+  const prevIdsRef = useRef(null);
+  // Lets a slow response for a previous view be discarded.
+  const viewRootIdRef = useRef(viewRootId);
+  viewRootIdRef.current = viewRootId;
 
-  const currentParent = parentStack.length ? parentStack[parentStack.length - 1] : null;
-  const currentParentId = currentParent ? currentParent.id : null;
-
-  // Reset the navigation stack whenever the selected chat changes.
+  // Reset to the chat root whenever the selected chat changes.
   useEffect(() => {
-    setParentStack(chatId ? [{ id: chatId, label: 'Chat' }] : []);
+    setViewRootId(chatId);
   }, [chatId]);
 
   const loadMessages = useCallback(async () => {
-    if (!currentParentId) {
+    if (!viewRootId) {
       return;
     }
+    const requestedId = viewRootId;
     try {
-      const result = await api.getMessages(currentParentId);
+      const result = await api.getMessages(requestedId);
+      if (viewRootIdRef.current !== requestedId) return;
       if (result.status === 'success' && result.payload) {
+        setLoadError('');
         setMessages((prevMessages) => {
           // Re-render if anything changed — IDs, order, or content (e.g. a Connect4 move).
           if (JSON.stringify(prevMessages) === JSON.stringify(result.payload)) {
@@ -138,31 +255,47 @@ function ChatView({ chatId, currentUser, onSelectChat, onToggleSidebar, sidebarO
           return result.payload;
         });
       } else {
+        setLoadError(result.error || 'Failed to load messages');
         setMessages([]);
       }
     } catch (err) {
+      if (viewRootIdRef.current !== requestedId) return;
       console.error('Failed to load messages:', err);
       setMessages([]);
     } finally {
-      setLoading(false);
+      if (viewRootIdRef.current === requestedId) setLoading(false);
     }
-  }, [currentParentId]);
+  }, [viewRootId]);
 
-  // Clear messages and show the loading state when navigating to a new parent.
+  // Clear messages, the reply target and show the loading state when the view root changes.
   useEffect(() => {
     setMessages([]);
+    setLoadError('');
+    setReplyTo(null);
     setLoading(true);
-  }, [currentParentId]);
+    prevIdsRef.current = null;
+  }, [viewRootId]);
 
   useEffect(() => {
-    if (!currentParentId) {
+    if (!viewRootId) {
       return;
     }
 
     loadMessages();
 
-    const handleRefreshMessages = () => {
-      loadMessages();
+    // Live updates: the socket payload is { res, data: message }. Attach the new
+    // message under its parent if the parent is in this view; ignore it otherwise.
+    const handleRefreshMessages = (event) => {
+      const incoming = event && event.detail && event.detail.data;
+      if (!incoming || !incoming.message_id || incoming.parent_id === undefined) {
+        loadMessages();
+        return;
+      }
+      setMessages((prev) => {
+        if (prev.some((m) => m.message_id === incoming.message_id)) return prev;
+        if (!prev.some((m) => m.message_id === incoming.parent_id)) return prev;
+        return [...prev, incoming];
+      });
     };
     window.addEventListener('refreshMessages', handleRefreshMessages);
 
@@ -176,37 +309,52 @@ function ChatView({ chatId, currentUser, onSelectChat, onToggleSidebar, sidebarO
         clearInterval(intervalId);
       }
     };
-  }, [currentParentId, loadMessages]);
+  }, [viewRootId, loadMessages]);
 
-  const handleRefresh = () => {
+  const handleRefresh = useCallback(() => {
+    loadMessages();
+  }, [loadMessages]);
+
+  const tree = useMemo(() => buildTree(messages, viewRootId), [messages, viewRootId]);
+  const rootMsg = tree ? tree.msg : null;
+  const isChatRoot = viewRootId === chatId || (rootMsg && rootMsg.parent_id == null);
+
+  const openThread = useCallback((messageId) => {
+    if (messageId) setViewRootId(messageId);
+  }, []);
+
+  const handleReply = useCallback((msg) => {
+    setReplyTo(msg);
+  }, []);
+
+  const handleMessageSent = () => {
+    setReplyTo(null);
     loadMessages();
   };
 
-  // Open the children of a message as a nested sub-chat.
-  const openSubChat = (msg) => {
-    const text = msg.content ? (msg.content.title || msg.content.text || '').trim() : '';
-    const label = text ? text.slice(0, 30) : 'Sub-chat';
-    setParentStack((stack) => [...stack, { id: msg.message_id, label }]);
-  };
-
-  // Navigate back up the sub-chat stack to the given depth.
-  const goToParent = (index) => {
-    setParentStack((stack) => stack.slice(0, index + 1));
-  };
-
-  // Scroll to bottom only when new messages are added (not when existing messages update, e.g. Connect4 moves)
+  // Scroll to the bottom when a view first loads, and bring newly arrived
+  // messages into view afterwards (not when existing messages update, e.g. Connect4 moves).
   useEffect(() => {
-    if (!messagesEndRef.current) return;
+    const container = containerRef.current;
+    if (!container || loading) return;
 
-    const prev = prevMessagesRef.current;
-    const isNewMessage = messages.length > prev.length ||
-      (messages.length === prev.length && messages.some((msg, i) => msg.message_id !== prev[i]?.message_id));
+    const ids = new Set(messages.map((m) => m.message_id));
+    const prevIds = prevIdsRef.current;
+    prevIdsRef.current = ids;
 
-    if (isNewMessage) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    if (prevIds === null) {
+      if (typeof container.scrollTo === 'function') {
+        container.scrollTo({ top: container.scrollHeight });
+      }
+      return;
     }
-    prevMessagesRef.current = messages;
-  }, [messages]);
+
+    const added = messages.filter((m) => !prevIds.has(m.message_id));
+    if (added.length === 0) return;
+    const newest = added[added.length - 1];
+    const el = container.querySelector(`[data-message-id="${newest.message_id}"]`);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, [messages, loading]);
 
   if (!chatId) {
     return (
@@ -218,89 +366,104 @@ function ChatView({ chatId, currentUser, onSelectChat, onToggleSidebar, sidebarO
     );
   }
 
+  const title = isChatRoot
+    ? (rootMsg && rootMsg.content && rootMsg.content.title) || 'Chat'
+    : 'Thread';
+  const replies = tree ? tree.children : [];
+
   return (
     <div className="chat-view">
       <div className="chat-header">
-        {parentStack.length > 1 ? (
-          <div className="subchat-nav">
+        <div className="chat-header-main">
+          <h3>{title}</h3>
+          {onToggleSidebar && (
             <button
               type="button"
-              className="link-btn back-btn"
-              onClick={() => goToParent(parentStack.length - 2)}
+              className="toggle-sidebar-btn"
+              onClick={onToggleSidebar}
+              title="Toggle chats list"
+              aria-label="Toggle chats list"
             >
-              ← Back
+              📋 {sidebarOpen ? 'Hide Chats' : 'Chats'}
             </button>
-            <h3>{currentParent.label}</h3>
-          </div>
-        ) : (
-          <div className="chat-header-main">
-            <h3>Chat</h3>
-            {onToggleSidebar && (
+          )}
+        </div>
+        {!isChatRoot && (
+          <div className="subchat-nav">
+            {rootMsg && rootMsg.parent_id && (
               <button
                 type="button"
-                className="toggle-sidebar-btn"
-                onClick={onToggleSidebar}
-                title="Toggle chats list"
-                aria-label="Toggle chats list"
+                className="link-btn back-btn"
+                onClick={() => openThread(rootMsg.parent_id)}
               >
-                📋 {sidebarOpen ? 'Hide Chats' : 'Chats'}
+                ↑ up one level
               </button>
             )}
+            <button type="button" className="link-btn back-btn" onClick={() => openThread(chatId)}>
+              back to full chat
+            </button>
           </div>
         )}
       </div>
-      <div className="messages-container">
+      <div className="messages-container" ref={containerRef}>
         {loading ? (
           <p>Loading messages...</p>
-        ) : messages.length === 0 ? (
-          <p className="no-messages">No messages yet. Be the first to send one!</p>
+        ) : loadError ? (
+          <p className="error">{loadError}</p>
         ) : (
-          messages.map((msg, index) => {
-            const isConnect4 = msg.content && Array.isArray(msg.content.grid);
-            return (
-              <div
-                key={msg.message_id || index}
-                className={`message ${msg.sender_name === currentUser.username ? 'own' : 'other'}${isConnect4 ? ' connect4-message' : ''}`}
-              >
-                {isConnect4 ? (
-                  <Connect4Board
-                    msg={msg}
+          <>
+            {!isChatRoot && rootMsg && (
+              <div className="thread-root" data-message-id={rootMsg.message_id}>
+                <div className="message other">
+                  <MessageBody msg={rootMsg} currentUser={currentUser} onMoveSent={handleRefresh} />
+                  <MessageMeta msg={rootMsg} currentUser={currentUser} />
+                </div>
+              </div>
+            )}
+            {replies.length === 0 ? (
+              <p className="no-messages">No messages yet. Be the first to send one!</p>
+            ) : (
+              <div className="thread-list">
+                {replies.map((child) => (
+                  <ThreadNode
+                    key={child.msg.message_id}
+                    node={child}
+                    depth={1}
                     currentUser={currentUser}
+                    replyToId={replyTo ? replyTo.message_id : null}
+                    onReply={handleReply}
+                    onOpenThread={openThread}
                     onMoveSent={handleRefresh}
                   />
-                ) : (
-                  <>
-                    {msg.content && (msg.content.title || msg.content.text) && (msg.content.title || msg.content.text).trim() && (
-                      <div className="message-content">{msg.content.title || msg.content.text}</div>
-                    )}
-                    {msg.content && msg.content.url && <ChatImage objectKey={msg.content.url} />}
-                  </>
-                )}
-                <div className="message-meta">
-                  <span className="message-sender">
-                    {msg.sender_name === currentUser.username ? 'You' : msg.sender_name}
-                  </span>
-                  <span className="message-time">
-                    {msg.sent_at ? new Date(msg.sent_at).toLocaleString() : ''}
-                  </span>
-                </div>
-                {msg.message_id && (
-                  <button
-                    type="button"
-                    className="link-btn subchat-btn"
-                    onClick={() => openSubChat(msg)}
-                    title="Open a sub-chat from this message"
-                  >
-                    💬 Open sub-chat
-                  </button>
-                )}
+                ))}
               </div>
-            );
-          })
+            )}
+          </>
         )}
-        <div ref={messagesEndRef} />
       </div>
-      <SendMessage chatId={currentParentId} senderName={currentUser.username} onMessageSent={handleRefresh} />
+      {replyTo && (
+        <div className="reply-indicator">
+          <span className="reply-indicator-text">
+            Replying to <strong>{replyTo.sender_name === currentUser.username ? 'yourself' : replyTo.sender_name}</strong>
+            {messageSnippet(replyTo) && `: ${messageSnippet(replyTo)}`}
+          </span>
+          <button
+            type="button"
+            className="reply-indicator-cancel"
+            onClick={() => setReplyTo(null)}
+            aria-label="Cancel reply"
+            title="Cancel reply"
+          >
+            ×
+          </button>
+        </div>
+      )}
+      <SendMessage
+        chatId={chatId}
+        parentId={replyTo ? replyTo.message_id : viewRootId}
+        senderName={currentUser.username}
+        onMessageSent={handleMessageSent}
+      />
     </div>
   );
 }

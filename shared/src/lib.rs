@@ -3,7 +3,6 @@
 //! enjoy!
 use reqwest::{self};
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
 // ---------------------------------------------------------------------------
 // User
@@ -40,18 +39,77 @@ pub struct Message<C = serde_json::Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    // for testing
+    #[derive(Deserialize)]
+    struct LoginResponse {
+        payload: LoginPayload,
+        status: String,
+    }
+    #[derive(Clone, Deserialize, Debug)]
+    struct LoginPayload {
+        token: String,
+        username: String,
+    }
+    async fn get_jwt() -> String {
+        // let url = "localhost:9821/auth/login";
+        // let payload = serde_json::json!({
+        //     "username": "test0",
+        //     "password": "aaa",
+        // });
+        //
+        // let client = reqwest::Client::new();
+        //
+        // let res = match client.post(url).json(&payload).s.awaitend().await {
+        //     Ok(res) => res,
+        //     Err(e) => {
+        //         println!("Network or request error: {e}. Please try again.");
+        //         panic!();
+        //     }
+        // };
+        //
+        // if !res.status().is_success() {
+        //     let status = res.status();
+        //     let body = res.text().await.unwrap_or_default();
+        //     println!(
+        //         "Login failed (status {}): {}. Please try again.",
+        //         status, body
+        //     );
+        //     panic!();
+        // }
+        // no work
+        String::from("test jwt")
 
+        // return Ok(user_info);
+    }
     #[test]
     fn create_message_sender() {
         let parent_uuid = uuid::Uuid::new_v4();
         let user = "testUser".to_string();
 
         let content = serde_json::json!({
-            "test": message,
+            "test": "test message",
         });
-        let create_message = Message::create_message_sender(parent_id, user_name);
+        let create_message = SendMessage::make_send_message_creater(parent_uuid, &user);
         let message1 = create_message(content);
         assert_eq!(message1.sender_name, user);
+    }
+
+    #[test]
+    fn send_message() {
+        let parent_uuid = uuid::Uuid::new_v4();
+        let user = "testUser".to_string();
+
+        let content = serde_json::json!({
+            "test": "test message",
+        });
+        let create_message = SendMessage::make_send_message_creater(parent_uuid, &user);
+        let message1 = create_message(content);
+
+        let jwt = get_jwt().await;
+        message1
+            .send(jwt, "http://localhost:9821/messages")
+            .await
+            .unwrap()
     }
 }
 
@@ -63,22 +121,39 @@ pub struct SendMessage {
     pub content: serde_json::Value,
 }
 
+/// The response body from `POST /messages`:
+/// `{"res": "success", "data": <Message>}` on success,
+/// `{"res": "error: ..."}` on failure.
+#[derive(Debug, Deserialize)]
+struct PostMessageResponse {
+    res: String,
+    data: Option<Message>,
+}
+
 impl SendMessage {
-    pub async fn send(&self, token: &str, url: &str) -> Result<uuid::Uuid, reqwest::Error> {
+    pub async fn send(
+        &self,
+        token: &str,
+        url: &str,
+    ) -> Result<uuid::Uuid, Box<dyn std::error::Error + Send + Sync>> {
         let client = reqwest::Client::new();
         let responce = client
             .post(url)
-            .json(&self.content)
+            .json(self)
             .bearer_auth(token)
             .send()
-            .await?;
-        let parsed_res = responce.json::<Uuid>().await?;
-        Ok(parsed_res)
+            .await?
+            .error_for_status()?;
+        let parsed_res = responce.json::<PostMessageResponse>().await?;
+        match parsed_res.data {
+            Some(message) if parsed_res.res == "success" => Ok(message.message_id),
+            _ => Err(format!("failed to send message: {}", parsed_res.res).into()),
+        }
     }
     // love curry
     pub fn make_send_message_creater(
         parent_id: uuid::Uuid,
-        user_name: &str,
+        user_name: String,
     ) -> impl Fn(serde_json::Value) -> SendMessage {
         move |content: serde_json::Value| SendMessage {
             sender_name: user_name.to_string(),

@@ -7,7 +7,7 @@ license = "Apache-2.0"
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+serde_json = "1.0.115"
 uuid = { version = "1", features = ["serde", "v4"] }
 chrono = { version = "0.4", features = ["serde"] }
 sqlx = { version = "0.7", features = [
@@ -17,7 +17,13 @@ sqlx = { version = "0.7", features = [
   "uuid",
 ], optional = true }
 reqwest = { version = "0.13.5", features = ["json"] }
+rust_socketio = "0.6.0"
+
 
 [features]
 db = ["sqlx"]
 sqlx = ["dep:sqlx"]
+
+
+
+

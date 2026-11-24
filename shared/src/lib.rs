@@ -1,11 +1,13 @@
 //! bens chat shared
 //! Use it but build yoru own frontend for bens chat or make a bot that uses it
+//!
 //! enjoy!
 use reqwest::{self};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 //for bot
 use rust_socketio::{ClientBuilder, Payload, RawClient};
+use std::thread;
 
 // ---------------------------------------------------------------------------
 // User
@@ -136,8 +138,8 @@ pub struct SendMessage {
 impl SendMessage {
     pub async fn send(
         &self,
-        token: &str,
-        url: &str,
+        token: String,
+        url: String,
     ) -> Result<uuid::Uuid, Box<dyn std::error::Error + Send + Sync>> {
         let client = reqwest::Client::new();
         let responce = client
@@ -431,20 +433,84 @@ pub struct Bot {}
 
 // const BASE_URL: &str = "https://bens-chat.team-stingray.com";
 const BASE_URL: &str = "http://localhost:9821";
+#[derive(Deserialize)]
+struct LoginResponse {
+    payload: LoginPayload,
+    status: String,
+}
+#[derive(Clone, Deserialize, Debug)]
+struct LoginPayload {
+    token: String,
+    username: String,
+}
+async fn jwt() -> String {
+    let url = format!("{BASE_URL}/auth/login");
+    let payload = serde_json::json!({
+        "username": "t0",
+        "password": "aaa",
+    });
+
+    let client = reqwest::blocking::Client::new();
+
+    let res = match client.post(url).json(&payload).send() {
+        Ok(res) => res,
+        Err(e) => {
+            println!("Network or request error: {e}. Please try again.");
+            panic!();
+        }
+    };
+
+    let text = match res.text() {
+        Ok(text) => text,
+        Err(e) => {
+            println!("Failed to read response: {e}. Please try again.");
+            panic!();
+        }
+    };
+
+    let data: LoginResponse = match serde_json::from_str(&text) {
+        Ok(data) => data,
+        Err(e) => {
+            println!("Could not parse login response ({e}). Please try again.");
+            panic!();
+        }
+    };
+
+    let user_info = data.payload;
+    user_info.token
+}
 
 impl Bot {
-    fn start<F>(respond: F)
+    pub async fn start<F>(respond: F)
     where
-        F: Fn(Message) -> SendMessage,
+        F: Fn(Message) -> SendMessage + Send + 'static,
     {
-        let callback = |payload: Payload, _s: RawClient| {
-            print!("text callback");
+        let token = jwt().await;
+        let callback = move |payload: Payload, _s: RawClient| {
+            if let Payload::Text(values) = payload {
+                for v in values {
+                    let data = v["data"].clone();
+
+                    let d: Message = serde_json::from_value(data).unwrap();
+                    let res = respond(d.clone());
+                    let msg = SendMessage {
+                        sender_name: String::from("t0"),
+                        parent_id: res.parent_id,
+                        content: res.content,
+                    };
+
+                    let t = token.clone();
+                    thread::spawn(async move || {
+                        let _m = msg.send(t, String::from("http://localhost:9821")).await;
+                    });
+                }
+            }
         };
-        let mut socket = ClientBuilder::new(BASE_URL)
+        let _socket = ClientBuilder::new(BASE_URL)
             .namespace("/")
             .on("open", move |_, s: RawClient| {
                 // TODO: change hard coded name
-                if let Err(e) = s.emit("join_chats", json!("t0".clone())) {
+                if let Err(e) = s.emit("join_chats", json!("t0")) {
                     eprintln!("join failed: {e}");
                 }
             })
@@ -456,11 +522,34 @@ impl Bot {
         // - will need username and passord to get jwt
         // pass mesage to fn
         // send back resulting messae to right chat
-        SendMessage {
-            sender_name: String::from("t0"),
-            parent_id: Some(uuid::Uuid::nil()),
-            content: json!({"key": "value"}),
+    }
+    pub async fn no_responce<F>(udf: F)
+    where
+        F: Fn(Message) + Send + 'static,
+    {
+        // fire and forget udf (user defind function), using thread::spon so the udf can be an async
+        let callback = move |payload: Payload, _s: RawClient| {
+            if let Payload::Text(values) = payload {
+                for v in values {
+                    let data = v["data"].clone();
+
+                    let d: Message = serde_json::from_value(data).unwrap();
+                    udf(d.clone());
+                }
+            }
         };
+        let _socket = ClientBuilder::new(BASE_URL)
+            .namespace("/")
+            .on("open", move |_, s: RawClient| {
+                // TODO: change hard coded name
+                if let Err(e) = s.emit("join_chats", json!("t0")) {
+                    eprintln!("join failed: {e}");
+                }
+            })
+            .on("new_message", callback)
+            .on("error", |err, _| eprintln!("Error: {:#?}", err))
+            .connect()
+            .expect("Connection failed");
     }
 }
 #[cfg(test)]
@@ -471,8 +560,8 @@ mod tests {
     fn test_bot() {
         let test_func = |msg: Message| SendMessage {
             sender_name: String::from("sender name"),
-            parent_id: Some(uuid::Uuid::nil()),
-            content: json!({"key": "value"}),
+            parent_id: msg.parent_id,
+            content: msg.content,
         };
         Bot::start(test_func);
     }

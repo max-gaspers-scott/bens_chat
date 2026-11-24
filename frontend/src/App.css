@@ -226,6 +226,16 @@ body {
   text-decoration: underline;
 }
 
+.auth-form .link-btn,
+.auth-form .link-btn:hover {
+  width: auto;
+  padding: 0;
+  margin: 0;
+  background: none;
+  color: #3498db;
+  font-size: inherit;
+}
+
 /* Chat Layout */
 .chat-container {
   display: flex;
@@ -483,6 +493,7 @@ body {
 .message-content {
   margin-bottom: 5px;
   word-wrap: break-word;
+  white-space: pre-wrap; /* keep line breaks from Shift+Enter */
 }
 
 .message-meta {
@@ -644,6 +655,11 @@ body {
   background-color: var(--input-bg);
   color: var(--text-primary);
   box-sizing: border-box;
+  font-family: inherit;
+  line-height: 1.3;
+  resize: none;
+  max-height: 150px;
+  overflow-y: auto;
 }
 
 .send-message .send-message-input:focus {

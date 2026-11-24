@@ -1,8 +1,13 @@
 //! bens chat shared
 //! Use it but build yoru own frontend for bens chat or make a bot that uses it
+//!
 //! enjoy!
 use reqwest::{self};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
+//for bot
+use rust_socketio::{ClientBuilder, Payload, RawClient};
+use std::thread;
 
 // ---------------------------------------------------------------------------
 // User
@@ -35,91 +40,83 @@ pub struct Message<C = serde_json::Value> {
     #[serde(default)]
     pub sent_at: chrono::DateTime<chrono::Utc>,
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    // for testing
-    #[derive(Deserialize)]
-    struct LoginResponse {
-        payload: LoginPayload,
-        status: String,
-    }
-    #[derive(Clone, Deserialize, Debug)]
-    struct LoginPayload {
-        token: String,
-        username: String,
-    }
-    async fn get_jwt() -> String {
-        // let url = "localhost:9821/auth/login";
-        // let payload = serde_json::json!({
-        //     "username": "test0",
-        //     "password": "aaa",
-        // });
-        //
-        // let client = reqwest::Client::new();
-        //
-        // let res = match client.post(url).json(&payload).s.awaitend().await {
-        //     Ok(res) => res,
-        //     Err(e) => {
-        //         println!("Network or request error: {e}. Please try again.");
-        //         panic!();
-        //     }
-        // };
-        //
-        // if !res.status().is_success() {
-        //     let status = res.status();
-        //     let body = res.text().await.unwrap_or_default();
-        //     println!(
-        //         "Login failed (status {}): {}. Please try again.",
-        //         status, body
-        //     );
-        //     panic!();
-        // }
-        // no work
-        String::from("test jwt")
-
-        // return Ok(user_info);
-    }
-    #[test]
-    fn create_message_sender() {
-        let parent_uuid = uuid::Uuid::new_v4();
-        let user = "testUser".to_string();
-
-        let content = serde_json::json!({
-            "test": "test message",
-        });
-        let create_message = SendMessage::make_send_message_creater(parent_uuid, &user);
-        let message1 = create_message(content);
-        assert_eq!(message1.sender_name, user);
-    }
-
-    #[test]
-    fn send_message() {
-        let parent_uuid = uuid::Uuid::new_v4();
-        let user = "testUser".to_string();
-
-        let content = serde_json::json!({
-            "test": "test message",
-        });
-        let create_message = SendMessage::make_send_message_creater(parent_uuid, &user);
-        let message1 = create_message(content);
-
-        let jwt = get_jwt().await;
-        message1
-            .send(jwt, "http://localhost:9821/messages")
-            .await
-            .unwrap()
-    }
-}
-
-/// The body sent from the CLI when posting a new message.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct SendMessage {
-    pub sender_name: String,
-    pub parent_id: Option<uuid::Uuid>,
-    pub content: serde_json::Value,
-}
+//
+// #[cfg(test)]
+// mod tests {
+// use super::*;
+//     // for testing
+//     #[derive(deserialize)]
+//     struct loginresponse {
+//         payload: loginpayload,
+//         status: string,
+//     }
+//     #[derive(clone, deserialize, debug)]
+//     struct loginpayload {
+//         token: string,
+//         username: string,
+//     }
+//     async fn get_jwt() -> string {
+//         // let url = "localhost:9821/auth/login";
+//         // let payload = serde_json::json!({
+//         //     "username": "test0",
+//         //     "password": "aaa",
+//         // });
+//         //
+//         // let client = reqwest::client::new();
+//         //
+//         // let res = match client.post(url).json(&payload).s.awaitend().await {
+//         //     ok(res) => res,
+//         //     err(e) => {
+//         //         println!("network or request error: {e}. please try again.");
+//         //         panic!();
+//         //     }
+//         // };
+//         //
+//         // if !res.status().is_success() {
+//         //     let status = res.status();
+//         //     let body = res.text().await.unwrap_or_default();
+//         //     println!(
+//         //         "login failed (status {}): {}. please try again.",
+//         //         status, body
+//         //     );
+//         //     panic!();
+//         // }
+//         // no work
+//         string::from("test jwt")
+//
+//         // return ok(user_info);
+//     }
+//     #[test]
+//     fn create_message_sender() {
+//         let parent_uuid = uuid::uuid::new_v4();
+//         let user = "testuser".to_string();
+//
+//         let content = serde_json::json!({
+//             "test": "test message",
+//         });
+//         let create_message = Sendmessage::make_send_message_creater(parent_uuid, &user);
+//         let message1 = create_message(content);
+//         assert_eq!(message1.sender_name, user);
+//     }
+//
+//     #[test]
+//     fn send_message() {
+//         let parent_uuid = uuid::uuid::new_v4();
+//         let user = "testuser".to_string();
+//
+//         let content = serde_json::json!({
+//             "test": "test message",
+//         });
+//         let create_message = sendmessage::make_send_message_creater(parent_uuid, &user);
+//         let message1 = create_message(content);
+//
+//         let jwt = get_jwt().await;
+//         message1
+//             .send(jwt, "http://localhost:9821/messages")
+//             .await
+//             .unwrap()
+//     }
+// }
 
 /// The response body from `POST /messages`:
 /// `{"res": "success", "data": <Message>}` on success,
@@ -130,11 +127,19 @@ struct PostMessageResponse {
     data: Option<Message>,
 }
 
+/// The body sent from the CLI when posting a new message.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SendMessage {
+    pub sender_name: String,
+    pub parent_id: Option<uuid::Uuid>,
+    pub content: serde_json::Value,
+}
+
 impl SendMessage {
     pub async fn send(
         &self,
-        token: &str,
-        url: &str,
+        token: String,
+        url: String,
     ) -> Result<uuid::Uuid, Box<dyn std::error::Error + Send + Sync>> {
         let client = reqwest::Client::new();
         let responce = client
@@ -421,4 +426,143 @@ pub enum Chip {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Position {
     pub content: usize,
+}
+
+// name and passbe should  from env var
+pub struct Bot {}
+
+// const BASE_URL: &str = "https://bens-chat.team-stingray.com";
+const BASE_URL: &str = "http://localhost:9821";
+#[derive(Deserialize)]
+struct LoginResponse {
+    payload: LoginPayload,
+    status: String,
+}
+#[derive(Clone, Deserialize, Debug)]
+struct LoginPayload {
+    token: String,
+    username: String,
+}
+async fn jwt() -> String {
+    let url = format!("{BASE_URL}/auth/login");
+    let payload = serde_json::json!({
+        "username": "t0",
+        "password": "aaa",
+    });
+
+    let client = reqwest::blocking::Client::new();
+
+    let res = match client.post(url).json(&payload).send() {
+        Ok(res) => res,
+        Err(e) => {
+            println!("Network or request error: {e}. Please try again.");
+            panic!();
+        }
+    };
+
+    let text = match res.text() {
+        Ok(text) => text,
+        Err(e) => {
+            println!("Failed to read response: {e}. Please try again.");
+            panic!();
+        }
+    };
+
+    let data: LoginResponse = match serde_json::from_str(&text) {
+        Ok(data) => data,
+        Err(e) => {
+            println!("Could not parse login response ({e}). Please try again.");
+            panic!();
+        }
+    };
+
+    let user_info = data.payload;
+    user_info.token
+}
+
+impl Bot {
+    pub async fn start<F>(respond: F)
+    where
+        F: Fn(Message) -> SendMessage + Send + 'static,
+    {
+        let token = jwt().await;
+        let callback = move |payload: Payload, _s: RawClient| {
+            if let Payload::Text(values) = payload {
+                for v in values {
+                    let data = v["data"].clone();
+
+                    let d: Message = serde_json::from_value(data).unwrap();
+                    let res = respond(d.clone());
+                    let msg = SendMessage {
+                        sender_name: String::from("t0"),
+                        parent_id: res.parent_id,
+                        content: res.content,
+                    };
+
+                    let t = token.clone();
+                    thread::spawn(async move || {
+                        let _m = msg.send(t, String::from("http://localhost:9821")).await;
+                    });
+                }
+            }
+        };
+        let _socket = ClientBuilder::new(BASE_URL)
+            .namespace("/")
+            .on("open", move |_, s: RawClient| {
+                // TODO: change hard coded name
+                if let Err(e) = s.emit("join_chats", json!("t0")) {
+                    eprintln!("join failed: {e}");
+                }
+            })
+            .on("new_message", callback)
+            .on("error", |err, _| eprintln!("Error: {:#?}", err))
+            .connect()
+            .expect("Connection failed");
+
+        // - will need username and passord to get jwt
+        // pass mesage to fn
+        // send back resulting messae to right chat
+    }
+    pub async fn no_responce<F>(udf: F)
+    where
+        F: Fn(Message) + Send + 'static,
+    {
+        // fire and forget udf (user defind function), using thread::spon so the udf can be an async
+        let callback = move |payload: Payload, _s: RawClient| {
+            if let Payload::Text(values) = payload {
+                for v in values {
+                    let data = v["data"].clone();
+
+                    let d: Message = serde_json::from_value(data).unwrap();
+                    udf(d.clone());
+                }
+            }
+        };
+        let _socket = ClientBuilder::new(BASE_URL)
+            .namespace("/")
+            .on("open", move |_, s: RawClient| {
+                // TODO: change hard coded name
+                if let Err(e) = s.emit("join_chats", json!("t0")) {
+                    eprintln!("join failed: {e}");
+                }
+            })
+            .on("new_message", callback)
+            .on("error", |err, _| eprintln!("Error: {:#?}", err))
+            .connect()
+            .expect("Connection failed");
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_bot() {
+        let test_func = |msg: Message| SendMessage {
+            sender_name: String::from("sender name"),
+            parent_id: msg.parent_id,
+            content: msg.content,
+        };
+        Bot::start(test_func);
+    }
 }

@@ -436,6 +436,7 @@ version = "0.2.3"
 dependencies = [
  "chrono",
  "reqwest 0.13.5",
+ "rust_socketio",
  "serde",
  "serde_json",
  "sqlx",

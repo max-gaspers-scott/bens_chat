@@ -1,0 +1,57 @@
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: bens_chat2_db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - bens_chat2_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+
+  rustfs:
+    image: rustfs/rustfs:1.0.0-alpha.89
+    container_name: bens_chat2_rustfs
+    hostname: rustfs
+    environment:
+      - RUSTFS_VOLUMES=/data
+      - RUSTFS_ADDRESS=0.0.0.0:9000
+      - RUSTFS_CONSOLE_ENABLE=true
+      - RUSTFS_CONSOLE_ADDRESS=0.0.0.0:9001
+      - RUSTFS_ACCESS_KEY=rustfsadmin
+      - RUSTFS_SECRET_KEY=rustfsadmin
+    ports:
+      - "9000:9000"  # API endpoint
+      - "9001:9001"  # Console
+    volumes:
+      - bens_chat2_minio_data:/data
+
+
+
+  app:
+    image: maxthemerman/bens_chat2-app:0.1.13
+    container_name: bens_chat2_app
+    ports:
+      - "9822:8081"
+    env_file:
+      - ${APP_ENV_FILE}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: on-failure
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  bens_chat2_postgres_data:
+  bens_chat2_minio_data:

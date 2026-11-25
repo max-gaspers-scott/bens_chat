@@ -523,7 +523,7 @@ impl Bot {
         // pass mesage to fn
         // send back resulting messae to right chat
     }
-    pub async fn no_responce<F>(udf: F)
+    pub fn no_responce<F>(udf: F)
     where
         F: Fn(Message) + Send + 'static,
     {
@@ -550,6 +550,9 @@ impl Bot {
             .on("error", |err, _| eprintln!("Error: {:#?}", err))
             .connect()
             .expect("Connection failed");
+        loop {
+            std::thread::park(); //why
+        }
     }
 }
 #[cfg(test)]

@@ -551,7 +551,7 @@ impl Bot {
             .connect()
             .expect("Connection failed");
         loop {
-            std::thread::park(); //why
+            std::thread::park(); //thread::park() puts the main thread to sleep forever without using CPU
         }
     }
 }
